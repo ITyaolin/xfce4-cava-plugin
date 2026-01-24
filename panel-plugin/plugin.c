@@ -38,6 +38,7 @@ const gint default_sensitivity = 100;
 const gint default_bars = 32;
 const gint default_bar_width = 2;
 const gint default_bar_spacing = 1;
+const gint default_bar_shape = BAR_SHAPE_RECTANGLE;
 const gint default_max_height = 100;
 const gint default_lower_cutoff_freq = 60;
 const gint default_higher_cutoff_freq = 16000;
@@ -190,6 +191,7 @@ void profile_save(CavaPlugin *c) {
         xfce_rc_write_int_entry(rc, "bars", s->bars);
         xfce_rc_write_int_entry(rc, "bar_width", s->bar_width);
         xfce_rc_write_int_entry(rc, "bar_spacing", s->bar_spacing);
+        xfce_rc_write_int_entry(rc, "bar_shape", s->bar_shape);
         xfce_rc_write_int_entry(rc, "max_height", s->max_height);
         xfce_rc_write_int_entry(rc, "lower_cutoff_freq", s->lower_cutoff_freq);
         xfce_rc_write_int_entry(rc, "higher_cutoff_freq", s->higher_cutoff_freq);
@@ -305,6 +307,7 @@ void profile_read(CavaPlugin *c) {
             s->bars = xfce_rc_read_int_entry(rc, "bars", default_bars);
             s->bar_width = xfce_rc_read_int_entry(rc, "bar_width", default_bar_width);
             s->bar_spacing = xfce_rc_read_int_entry(rc, "bar_spacing", default_bar_spacing);
+            s->bar_shape = xfce_rc_read_int_entry(rc, "bar_shape", default_bar_shape);
             s->max_height = xfce_rc_read_int_entry(rc, "max_height", default_max_height);
             s->lower_cutoff_freq = xfce_rc_read_int_entry(rc, "lower_cutoff_freq", default_lower_cutoff_freq);
             s->higher_cutoff_freq = xfce_rc_read_int_entry(rc, "higher_cutoff_freq", default_higher_cutoff_freq);
@@ -379,6 +382,7 @@ void profile_read(CavaPlugin *c) {
     s->bars = default_bars;
     s->bar_width = default_bar_width;
     s->bar_spacing = default_bar_spacing;
+    s->bar_shape = default_bar_shape;
     s->max_height = default_max_height;
     s->lower_cutoff_freq = default_lower_cutoff_freq;
     s->higher_cutoff_freq = default_higher_cutoff_freq;
@@ -426,6 +430,7 @@ static void display_size_allocate(GtkWidget *self, GtkAllocation *allocation,
         restyle_display(c);
         init_cava(c);
     }
+    config_colors(c);
 }
 
 static CavaPlugin *plugin_new(XfcePanelPlugin *plugin) {
@@ -544,8 +549,6 @@ void resize_display(CavaPlugin *c) {
     }
 
     gtk_widget_set_size_request(c->display, width, height);
-
-    config_colors(c);
 }
 
 void restyle_display(CavaPlugin *c) {

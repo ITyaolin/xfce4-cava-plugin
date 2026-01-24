@@ -136,6 +136,11 @@ static void load_settings(CavaPlugin *c) {
     set_color_button(w->border_color, s->border_color);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->margin), s->margin);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->padding), s->padding);
+
+    /* update all */
+    resize_display(c);
+    free_cava(c);
+    config_cava(c);
 }
 
 static void setting_changed(SettingChanged *sc) {
