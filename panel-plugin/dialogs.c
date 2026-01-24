@@ -33,7 +33,7 @@
 #include "cava/util.h"
 
 /* the website url */
-#define PLUGIN_WEBSITE "https://docs.xfce.org/panel-plugins/xfce4-cava-plugin"
+#define PLUGIN_WEBSITE "https://github.com/kreddkrikk/xfce4-cava-plugin"
 
 static void plugin_configure_response(
         GtkWidget *dialog, gint response, CavaPlugin *c) {
@@ -43,9 +43,11 @@ static void plugin_configure_response(
     {
         /* show help */
 #if LIBXFCE4UI_CHECK_VERSION(4, 21, 0)
-        result = g_spawn_command_line_async ("xfce-open --launch WebBrowser " PLUGIN_WEBSITE, NULL);
+        result = g_spawn_command_line_async(
+                "xfce-open --launch WebBrowser " PLUGIN_WEBSITE, NULL);
 #else
-        result = g_spawn_command_line_async ("exo-open --launch WebBrowser " PLUGIN_WEBSITE, NULL);
+        result = g_spawn_command_line_async(
+                "exo-open --launch WebBrowser " PLUGIN_WEBSITE, NULL);
 #endif
         if (G_UNLIKELY (result == FALSE))
             g_warning (_("Unable to open the following url: %s"), PLUGIN_WEBSITE);
@@ -56,7 +58,8 @@ static void plugin_configure_response(
         g_object_set_data (G_OBJECT (c->plugin), "dialog", NULL);
 
         /* save the plugin */
-        plugin_save (c->plugin, c);
+        plugin_save(c);
+        profile_save(c);
 
         /* destroy the properties dialog */
         gtk_widget_destroy (dialog);
@@ -77,6 +80,63 @@ typedef struct {
     gpointer setting;
     gint update_event;
 } SettingChanged;
+
+static void set_color_button(GtkWidget *widget, gchar *setting) {
+    GdkRGBA color;
+    rgba_parse(&color, setting);
+    gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(widget), &color);
+}
+
+static void load_settings(CavaPlugin *c) {
+    CavaSettings *s = &c->settings;
+    SettingWidgets *w = &c->widgets;
+
+    /* general */
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->framerate), s->framerate);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->sensitivity), s->sensitivity);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->bars), s->bars); 
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->bar_width), s->bar_width);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->bar_spacing), s->bar_spacing);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(w->bar_shape), s->bar_shape);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->lower_cutoff_freq), 
+            s->lower_cutoff_freq);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->higher_cutoff_freq), 
+            s->higher_cutoff_freq);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->sleep_timer), s->sleep_timer);
+
+    /* input */
+
+    /* output */
+    gtk_combo_box_set_active(GTK_COMBO_BOX(w->orientation), s->orientation);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(w->stereo), s->stereo);
+
+    /* color */
+    set_color_button(w->background, s->background);
+    set_color_button(w->foreground, s->foreground);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(w->gradient), s->gradient);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(w->horizontal_gradient), 
+            s->horizontal_gradient);
+    for (int i = 0; i < GRADIENT_COLOR_COUNT; i++) {
+        set_color_button(w->gradient_colors[i], s->gradient_colors[i]);
+        set_color_button(w->horizontal_gradient_colors[i], 
+                s->horizontal_gradient_colors[i]);
+    }
+
+    /* smoothing */
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->monstercat), s->monstercat);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(w->waves), s->waves);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->noise_reduction), 
+            s->noise_reduction);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(w->equalizer), s->equalizer);
+    for (int i = 0; i < EQUALIZER_KEY_COUNT; i++) {
+        gtk_range_set_value(GTK_RANGE(w->equalizer_keys[i]), 
+                s->equalizer_keys[i]);
+    }
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->border), s->border);
+    set_color_button(w->border_color, s->border_color);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->margin), s->margin);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->padding), s->padding);
+}
 
 static void setting_changed(SettingChanged *sc) {
     gint u = sc->update_event;
@@ -123,8 +183,8 @@ void rgba_parse(GdkRGBA *c, gchar *spec) {
             gdk_rgba_parse(c, spec);
         }
         else if (len == 9) {
-            // GDK 3 cannot parse alpha channels in HTML hexadecimal codes 
-            // so we must do it ourselves.
+            /* GDK 3 cannot parse alpha channels in HTML hexadecimal codes 
+             * so we must do it ourselves. */
             hex = (guint)g_ascii_strtoll(&spec[1], NULL, 16);
             c->red = (double)(hex >> 24) / 255.0;
             c->green = (double)((hex >> 16) & 0xff) / 255.0;
@@ -146,68 +206,181 @@ static gboolean validate_spin_button(gint value, SettingChanged *sc) {
     return TRUE;
 }
 
-static void spin_button_changed(GtkSpinButton *widget, SettingChanged *sc) {
-    gint value = gtk_spin_button_get_value_as_int(widget);
+static void spin_button_changed(GtkSpinButton *self, SettingChanged *sc) {
+    gint value = gtk_spin_button_get_value_as_int(self);
     if (value != *(gint *)sc->setting) {
         if (validate_spin_button(value, sc)) {
             *(gint *)sc->setting = value;
             setting_changed(sc);
         }
         else {
-           gtk_spin_button_set_value(widget, *(gint *)sc->setting); 
+           gtk_spin_button_set_value(self, *(gint *)sc->setting); 
         }
     }
 }
 
-static void combo_box_changed(GtkComboBox *widget, SettingChanged *sc) {
-    gint value = gtk_combo_box_get_active(widget);
+static void combo_box_changed(GtkComboBox *self, SettingChanged *sc) {
+    gint value = gtk_combo_box_get_active(self);
     if (value != *(gint *)sc->setting) {
         *(gint *)sc->setting = value;
         setting_changed(sc);
     }
 }
 
-static void check_button_changed(GtkToggleButton *widget, SettingChanged *sc) {
-    gint value = gtk_toggle_button_get_active(widget);
+static void check_button_changed(GtkToggleButton *self, SettingChanged *sc) {
+    gint value = gtk_toggle_button_get_active(self);
     if (value != *(gint *)sc->setting) {
         *(gint *)sc->setting = value;
         setting_changed(sc);
     }
 }
 
-static void color_button_changed(GtkColorButton *widget, SettingChanged *sc) {
+static void color_button_changed(GtkColorButton *self, SettingChanged *sc) {
     GdkRGBA old_color;
     GdkRGBA new_color;
     rgba_parse(&old_color, (gchar *)sc->setting);
-    gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(widget), &new_color);
+    gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(self), &new_color);
     if (!gdk_rgba_equal(&old_color, &new_color)) {
         *(gchar **)sc->setting = rgba_to_html(&new_color);
         setting_changed(sc);
     }
 }
 
-static void scale_value_changed(GtkScale *widget, SettingChanged *sc) {
-    gdouble value = gtk_range_get_value(GTK_RANGE(widget));
+static void scale_value_changed(GtkScale *self, SettingChanged *sc) {
+    gdouble value = gtk_range_get_value(GTK_RANGE(self));
     if (value != *(gint *)sc->setting) {
         *(gdouble *)sc->setting = value;
         setting_changed(sc);
     }
 }
 
-static void reset_equalizer_button(GtkButton *widget, CavaPlugin *c) {
+static void reset_equalizer_button(GtkButton *self, CavaPlugin *c) {
     reset_equalizer(c);
     for (int i = 0; i < EQUALIZER_KEY_COUNT; i++) {
-        gtk_range_set_value(GTK_RANGE(c->equalizer_scales[i]), 
+        gtk_range_set_value(GTK_RANGE(c->widgets.equalizer_keys[i]), 
                 c->settings.equalizer_keys[i]);
     }
 }
-
-static void text_buffer_changed(GtkTextBuffer *widget, SettingChanged *sc) {
+/*
+static void text_buffer_changed(GtkTextBuffer *self, SettingChanged *sc) {
     GtkTextIter start, end;
-    gtk_text_buffer_get_start_iter(widget, &start);
-    gtk_text_buffer_get_end_iter(widget, &end);
-    *(gchar **)sc->setting = gtk_text_buffer_get_text(widget, &start, &end, FALSE);
+    gtk_text_buffer_get_start_iter(self, &start);
+    gtk_text_buffer_get_end_iter(self, &end);
+    *(gchar **)sc->setting = gtk_text_buffer_get_text(self, &start, &end, FALSE);
     setting_changed(sc);
+}
+*/
+static void profile_combo_box_changed(GtkComboBoxText *self, CavaPlugin *c) {
+    c->settings.profile = gtk_combo_box_text_get_active_text(self);
+    profile_read(c);
+    load_settings(c);
+}
+
+static gboolean new_profile_entry_key_press(GtkWidget *self, 
+        GdkEventKey *event, CavaPlugin *c) {
+    GtkWidget *dialog = gtk_widget_get_toplevel(GTK_WIDGET(self));
+    if (event->keyval == GDK_KEY_Return) {
+        gtk_dialog_response(GTK_DIALOG(dialog), GTK_RESPONSE_OK);
+    }
+    return FALSE;
+}
+
+static gint show_message_box(gchar *title, gchar *message, 
+        GtkButtonsType buttons) {
+    /* create dialog */
+    GtkWidget *parent_window = gtk_widget_get_toplevel(NULL);
+    GtkWidget *dialog = gtk_message_dialog_new(
+            GTK_WINDOW(parent_window),
+            GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+            GTK_MESSAGE_QUESTION,
+            buttons, "%s", message);
+    gtk_window_set_title(GTK_WINDOW(dialog), title);
+    gint result = gtk_dialog_run(GTK_DIALOG(dialog));
+    gtk_widget_destroy(dialog);
+    return result;
+}
+
+static gboolean profile_exists(gchar *profile_name) {
+    gchar *profile_path = get_profile_path(profile_name);
+    return profile_path != NULL && g_file_test(
+            profile_path, G_FILE_TEST_EXISTS);
+}
+
+static void add_new_profile(CavaPlugin *c, gchar *profile_name) {
+    gint result;
+    SettingWidgets *w = &c->widgets;
+    if (profile_name[0] == '\0')
+        return;
+    if (profile_exists(profile_name)) {
+        result = show_message_box("Replace Profile?", 
+                "A profile with this name already exists. Replace?", 
+                GTK_BUTTONS_YES_NO);
+        if (result != GTK_RESPONSE_YES)
+            return;
+    }
+    c->profile_count++;
+    c->settings.profile = profile_name;
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(w->profile), 
+            profile_name, profile_name);
+    gtk_combo_box_set_active_id(
+            GTK_COMBO_BOX(w->profile), profile_name);
+    gtk_widget_set_sensitive(GTK_WIDGET(w->del_profile), TRUE);
+    profile_save(c);
+}
+
+static void new_profile_button_clicked(GtkButton *self, CavaPlugin *c) {
+    /* create dialog */
+    GtkWidget *parent_window = gtk_widget_get_toplevel(GTK_WIDGET(self));
+    GtkWidget *dialog = gtk_dialog_new_with_buttons(
+            "New Profile", 
+            GTK_WINDOW(parent_window), 
+            GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+            "OK", GTK_RESPONSE_OK,
+            "Cancel", GTK_RESPONSE_CANCEL,
+            NULL);
+    gtk_window_set_resizable(GTK_WINDOW(dialog), FALSE);
+    gtk_container_set_border_width(GTK_CONTAINER(dialog), 8);
+    GtkWidget *entry = gtk_entry_new();
+    g_signal_connect(entry, "key-press-event", 
+            G_CALLBACK(new_profile_entry_key_press), c);
+    GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    GtkWidget *label = gtk_label_new("Profile Name:");
+    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_box_pack_start(GTK_BOX(hbox), label, FALSE, FALSE, 8);
+    gtk_box_pack_start(GTK_BOX(hbox), entry, FALSE, FALSE, 8);
+    gtk_box_pack_end(GTK_BOX(content_area), hbox, FALSE, FALSE, 8);
+    gtk_widget_show_all(dialog);
+
+    /* update profiles */
+    gchar *profile_name;
+    gint result = gtk_dialog_run(GTK_DIALOG(dialog));
+    profile_name = (gchar *)gtk_entry_get_text(GTK_ENTRY(entry));
+    if (result == GTK_RESPONSE_OK) {
+        add_new_profile(c, profile_name);
+    }
+    gtk_widget_destroy (dialog);
+}
+
+static void del_profile_button_clicked(GtkButton *self, CavaPlugin *c) {
+    /* create dialog */
+    gint result = show_message_box("Delete Profile",
+            "Are you sure you want to delete the selected profile?\n"
+            "This action cannot be undone.", GTK_BUTTONS_YES_NO);
+
+    /* update profiles */
+    gchar *profile_path;
+    SettingWidgets *w = &c->widgets;
+    if (result == GTK_RESPONSE_YES) {
+        profile_path = get_profile_path(c->settings.profile);
+        if (profile_path != NULL) {
+            c->profile_count--;
+            gtk_combo_box_text_remove(GTK_COMBO_BOX_TEXT(w->profile), 
+                    gtk_combo_box_get_active(GTK_COMBO_BOX(w->profile)));
+            gtk_combo_box_set_active(GTK_COMBO_BOX(w->profile), 0);
+            gtk_widget_set_sensitive(GTK_WIDGET(self), c->profile_count > 1);
+            remove(profile_path);
+        }
+    }
 }
 
 // Prepends a widget with a label, packs it into a single row or column and 
@@ -228,7 +401,8 @@ static void label_and_pack_widget(GtkWidget *container, GtkWidget *line,
         gtk_box_pack_start(GTK_BOX(line), label, FALSE, FALSE, 0);
         gtk_label_set_xalign(GTK_LABEL(label), xalign);
         gtk_label_set_yalign(GTK_LABEL(label), 0.5);
-        gtk_size_group_add_widget(sg, GTK_WIDGET(label));
+        if (sg != NULL)
+            gtk_size_group_add_widget(sg, GTK_WIDGET(label));
     }
     gtk_box_pack_start(GTK_BOX(container), GTK_WIDGET(line), FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(line), widget, expand, expand, 0);
@@ -237,89 +411,126 @@ static void label_and_pack_widget(GtkWidget *container, GtkWidget *line,
 static GtkWidget *create_spin_button(CavaPlugin *c, GtkWidget *container, 
         GtkSizeGroup *sg, gint update_event, gchar *text, gint *setting, 
         gint min, gint max) {
-    // Widget
     GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    GtkWidget *widget = gtk_spin_button_new_with_range(min, max, 1);
-    gtk_spin_button_set_value(GTK_SPIN_BUTTON(widget), *setting);
-    label_and_pack_widget(container, row, widget, sg, text, 0.0, FALSE);
-    SETTING_CHANGED_INIT(widget, "value-changed", spin_button_changed);
-    return widget;
+    GtkWidget *button = gtk_spin_button_new_with_range(min, max, 1);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(button), *setting);
+    label_and_pack_widget(container, row, button, sg, text, 0.0, FALSE);
+    SETTING_CHANGED_INIT(button, "value-changed", spin_button_changed);
+    return button;
 }
 
 static GtkWidget *create_check_button(CavaPlugin *c, GtkWidget *container, 
         GtkSizeGroup *sg, gint update_event, gchar *text, gint *setting) {
-    // Widget
-    GtkWidget *widget = gtk_check_button_new_with_mnemonic(text);
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(widget), *setting);
-    gtk_box_pack_start(GTK_BOX(container), GTK_WIDGET(widget), FALSE, FALSE, 0);
-    SETTING_CHANGED_INIT(widget, "toggled", check_button_changed);
-    return widget;
+    GtkWidget *button = gtk_check_button_new_with_mnemonic(text);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button), *setting);
+    gtk_box_pack_start(GTK_BOX(container), GTK_WIDGET(button), FALSE, FALSE, 0);
+    SETTING_CHANGED_INIT(button, "toggled", check_button_changed);
+    return button;
 }
 
 static GtkWidget *create_combo_box(CavaPlugin *c, GtkWidget *container, 
         GtkSizeGroup *sg, gint update_event, gchar *text, 
         const gchar *items[], gint count, gint *setting) {
-    // Widget
     GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    GtkWidget *widget = gtk_combo_box_text_new();
+    GtkWidget *combo = gtk_combo_box_text_new();
     for (int i = 0; i < count; i++)
-        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(widget), NULL, items[i]);
-    gtk_combo_box_set_active(GTK_COMBO_BOX(widget), *setting);
-    label_and_pack_widget(container, row, widget, sg, text, 0.0, FALSE);
-    SETTING_CHANGED_INIT(widget, "changed", combo_box_changed);
-    return widget;
+        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combo), NULL, items[i]);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(combo), *setting);
+    label_and_pack_widget(container, row, combo, sg, text, 0.0, FALSE);
+    SETTING_CHANGED_INIT(combo, "changed", combo_box_changed);
+    return combo;
 }
 
 static GtkWidget *create_color_button(CavaPlugin *c, GtkWidget *container, 
         GtkSizeGroup *sg, gint update_event, gchar *text, gchar **setting) {
-    // Widget
     GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     GdkRGBA color;
     rgba_parse(&color, *setting);
-    GtkWidget *widget = gtk_color_button_new_with_rgba(&color);
-    gtk_color_chooser_set_use_alpha(GTK_COLOR_CHOOSER(widget), TRUE);
-    label_and_pack_widget(container, row, widget, sg, text, 0.0, FALSE);
-    SETTING_CHANGED_INIT(widget, "color-set", color_button_changed);
-    return widget;
+    GtkWidget *button = gtk_color_button_new_with_rgba(&color);
+    gtk_color_chooser_set_use_alpha(GTK_COLOR_CHOOSER(button), TRUE);
+    label_and_pack_widget(container, row, button, sg, text, 0.0, FALSE);
+    SETTING_CHANGED_INIT(button, "color-set", color_button_changed);
+    return button;
 }
 
 static GtkWidget *create_scale(CavaPlugin *c, GtkWidget *container, 
         GtkSizeGroup *sg, gint update_event, gchar *text, gdouble *setting, 
         gdouble min, gdouble max, gdouble step) {
-    // Widget
     GtkWidget *column = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
     GtkAdjustment *adjustment = gtk_adjustment_new(
             *setting, min, max, step, 0, 0);
-    GtkWidget *widget = gtk_scale_new(GTK_ORIENTATION_VERTICAL, adjustment);
-    gtk_range_set_round_digits(GTK_RANGE(widget), 1);
-    gtk_range_set_inverted(GTK_RANGE(widget), TRUE);
-    gtk_scale_set_value_pos(GTK_SCALE(widget), GTK_POS_BOTTOM);
-    label_and_pack_widget(container, column, widget, sg, text, 0.5, TRUE);
-    SETTING_CHANGED_INIT(widget, "value-changed", scale_value_changed);
-    return widget;
+    GtkWidget *scale = gtk_scale_new(GTK_ORIENTATION_VERTICAL, adjustment);
+    gtk_range_set_round_digits(GTK_RANGE(scale), 1);
+    gtk_range_set_inverted(GTK_RANGE(scale), TRUE);
+    gtk_scale_set_value_pos(GTK_SCALE(scale), GTK_POS_BOTTOM);
+    label_and_pack_widget(container, column, scale, sg, text, 0.5, TRUE);
+    SETTING_CHANGED_INIT(scale, "value-changed", scale_value_changed);
+    return scale;
 }
 
 static void create_reset_button(CavaPlugin *c, GtkWidget *row, gchar *text, 
         gpointer cb) {
-    GtkWidget *widget = gtk_button_new_with_label(text);
-    gtk_box_pack_start(GTK_BOX(row), GTK_WIDGET(widget), FALSE, FALSE, 0);
-    g_signal_connect(widget, "clicked", G_CALLBACK(cb), c);
+    GtkWidget *button = gtk_button_new_with_label(text);
+    gtk_box_pack_start(GTK_BOX(row), GTK_WIDGET(button), FALSE, FALSE, 0);
+    g_signal_connect(button, "clicked", G_CALLBACK(cb), c);
 }
+/*
+   static void create_text_view(CavaPlugin *c, GtkWidget *container, 
+   gint update_event, gchar **setting, gint height) {
+   GtkWidget *widget = gtk_text_view_new();
+   GtkWidget *window = gtk_scrolled_window_new(NULL, NULL);
+   gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(window), GTK_SHADOW_IN);
+   gtk_widget_set_size_request(window, -1, height);
+   gtk_text_view_set_monospace(GTK_TEXT_VIEW(widget), TRUE);
+   GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(widget));
+   gtk_text_buffer_set_text(buffer, *setting, -1);
+   gtk_container_add(GTK_CONTAINER(window), widget);
+   gtk_box_pack_start(GTK_BOX(container), window, TRUE, TRUE, 8);
+   gtk_container_set_border_width(GTK_CONTAINER(widget), 18);
+   gtk_container_set_border_width(GTK_CONTAINER(window), 8);
+   SETTING_CHANGED_INIT(buffer, "changed", text_buffer_changed);
+   }
+   */
+static void populate_profile_combo_box(CavaPlugin *c) {
+    GDir *dir;
+    GError *error;
+    gchar *profile_name;
+    gint profile_index = 0;
+    const gchar *filename;
 
-static void create_text_view(CavaPlugin *c, GtkWidget *container, 
-        gint update_event, gchar **setting, gint height) {
-    GtkWidget *widget = gtk_text_view_new();
-    GtkWidget *window = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(window), GTK_SHADOW_IN);
-    gtk_widget_set_size_request(window, -1, height);
-    gtk_text_view_set_monospace(GTK_TEXT_VIEW(widget), TRUE);
-    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(widget));
-    gtk_text_buffer_set_text(buffer, *setting, -1);
-    gtk_container_add(GTK_CONTAINER(window), widget);
-    gtk_box_pack_start(GTK_BOX(container), window, TRUE, TRUE, 8);
-    gtk_container_set_border_width(GTK_CONTAINER(widget), 18);
-    gtk_container_set_border_width(GTK_CONTAINER(window), 8);
-    SETTING_CHANGED_INIT(buffer, "changed", text_buffer_changed);
+    /* initialize directory */
+    CavaSettings *s = &c->settings;
+    gchar *profile_dir = get_profile_dir();
+    if (profile_dir == NULL)
+        return;
+    dir = g_dir_open(profile_dir, 0, &error);
+    GtkWidget *widget = c->widgets.profile;
+    gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(widget));
+
+    /* build profile list */
+    gint counter = 0;
+    for (; (filename = g_dir_read_name(dir)); counter++) {
+        if (g_str_has_suffix(filename, ".rc")) {
+            profile_name = g_strsplit(filename, ".rc", 0)[0];
+            gtk_combo_box_text_append(
+                    GTK_COMBO_BOX_TEXT(widget), profile_name, profile_name);
+            if (g_str_equal(profile_name, s->profile)) {
+                profile_index = counter;
+            }
+        }
+    }
+    if (counter == 0) {
+        // no profiles found, create new profile
+        gtk_combo_box_text_append(
+                GTK_COMBO_BOX_TEXT(widget), s->profile, s->profile);
+        counter++;
+    }
+    c->profile_count = counter;
+     
+    /* update widgets */
+    gtk_combo_box_set_active(GTK_COMBO_BOX(widget), profile_index);
+    g_signal_connect(widget, "changed", G_CALLBACK(profile_combo_box_changed), c);
+    g_free(profile_dir);
 }
 
 static double logspace(double start, double stop, int n, int N) {
@@ -330,6 +541,7 @@ void plugin_configure (XfcePanelPlugin *plugin, CavaPlugin *c) {
     GtkWidget *dialog;
 
     CavaSettings *s = &c->settings;
+    SettingWidgets *w = &c->widgets;
 
     if (c->settings_dialog != NULL)
     {
@@ -337,42 +549,41 @@ void plugin_configure (XfcePanelPlugin *plugin, CavaPlugin *c) {
         return;
     }
 
-    /* create the dialog */
-    c->settings_dialog = dialog = xfce_titled_dialog_new_with_mixed_buttons (_("Cava Plugin"),
-            GTK_WINDOW (gtk_widget_get_toplevel (GTK_WIDGET (plugin))),
+    // Main window
+    c->settings_dialog = dialog = xfce_titled_dialog_new_with_mixed_buttons(
+            _("Cava Plugin"),
+            GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(plugin))),
             GTK_DIALOG_DESTROY_WITH_PARENT,
-            "help-browser-symbolic", _("_Help"), GTK_RESPONSE_HELP,
             "window-close-symbolic", _("_Close"), GTK_RESPONSE_OK,
             NULL);
-    g_object_add_weak_pointer (G_OBJECT (c->settings_dialog), (gpointer *) &c->settings_dialog);
-
-    /* center dialog on the screen */
+    g_object_add_weak_pointer(G_OBJECT(c->settings_dialog), 
+            (gpointer *)&c->settings_dialog);
     gtk_window_set_position (GTK_WINDOW (dialog), GTK_WIN_POS_CENTER);
-
-    /* set dialog icon */
     gtk_window_set_icon_name (GTK_WINDOW (dialog), "xfce4-settings");
-
     gtk_window_set_resizable(GTK_WINDOW(dialog), FALSE);
-
-    /* link the dialog to the plugin, so we can destroy it when the plugin
-     * is closed, but the dialog is still open */
     g_object_set_data (G_OBJECT (plugin), "dialog", dialog);
-
-    /* connect the response signal to the dialog */
     g_signal_connect (G_OBJECT (dialog), "response",
             G_CALLBACK(plugin_configure_response), c);
 
+    // Bars
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
     gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
-
     GtkSizeGroup *sg = gtk_size_group_new(GTK_SIZE_GROUP_HORIZONTAL);
-
-    create_spin_button(c, vbox, sg, UPDATE_ALL, "Bars:", &s->bars, 1, 512);
-    create_spin_button(c, vbox, sg, UPDATE_SIZE, "Bar Width:", &s->bar_width, 1, 100);
-    create_spin_button(c, vbox, sg, UPDATE_SIZE, "Bar Spacing:", &s->bar_spacing, 0, 10);
+    w->bars = create_spin_button(
+            c, vbox, sg, UPDATE_ALL, "Bars:", &s->bars, 1, 512);
+    w->bar_width = create_spin_button(
+            c, vbox, sg, UPDATE_SIZE, "Bar Width:", &s->bar_width, 1, 100);
+    w->bar_spacing = create_spin_button(
+            c, vbox, sg, UPDATE_SIZE, "Bar Spacing:", &s->bar_spacing, 0, 10);
+    const gchar *bar_shape_items[] = {
+        "rectangle",
+        "oblong",
+    };
+    w->bar_shape = create_combo_box(c, vbox, sg, UPDATE_NONE, "Bar Shape:", 
+            bar_shape_items, ARRAY_SIZE(bar_shape_items), &s->bar_shape);
 
     // Orientation
-    const gchar* items[] = {
+    const gchar *orientation_items[] = {
         "bottom",
         "top",
         "left",
@@ -380,66 +591,60 @@ void plugin_configure (XfcePanelPlugin *plugin, CavaPlugin *c) {
         "horizontal",
         "vertical",
     };
-    create_combo_box(c, vbox, sg, UPDATE_SIZE | UPDATE_COLORS, "Orientation:", 
-            items, ARRAY_SIZE(items), &s->orientation);
-    create_spin_button(c, vbox, sg, UPDATE_STYLES | UPDATE_SIZE, "Border:", &s->border, 0, 10);
-    create_spin_button(c, vbox, sg, UPDATE_STYLES | UPDATE_SIZE, "Margin:", &s->margin, 0, 100);
-    create_spin_button(c, vbox, sg, UPDATE_STYLES | UPDATE_SIZE, "Padding:", &s->padding, 0, 100);
-
+    w->orientation = create_combo_box(c, vbox, sg, 
+            UPDATE_SIZE | UPDATE_COLORS, "Orientation:", 
+            orientation_items, ARRAY_SIZE(orientation_items), &s->orientation);
     gtk_box_pack_start(GTK_BOX(vbox), 
-            gtk_separator_new(GTK_ORIENTATION_HORIZONTAL), FALSE, FALSE, 4);
+            gtk_separator_new(GTK_ORIENTATION_VERTICAL), FALSE, FALSE, 4);
 
-    create_spin_button(c, vbox, sg, UPDATE_CONFIG, "Frame Rate:", &s->framerate, 1, 1000);
-    create_spin_button(c, vbox, sg, UPDATE_NONE, "Sleep Timer (s):", &s->sleep_timer, 0, 1000);
-    create_spin_button(c, vbox, sg, UPDATE_NONE, "Sensitivity (%):", &s->sensitivity, 1, 1000);
-    create_spin_button(
-            c, vbox, sg, UPDATE_CONFIG, "Low frequency (Hz):", &s->lower_cutoff_freq, 0, 22000);
-    create_spin_button(
-            c, vbox, sg, UPDATE_CONFIG, "High frequency (Hz):", &s->higher_cutoff_freq, 0, 22000);
+    // CSS
+    GtkWidget *container;
+    w->border = create_spin_button(
+            c, vbox, sg, UPDATE_STYLES | UPDATE_SIZE, 
+            "Border:", &s->border, 0, 10);
+    container = gtk_widget_get_parent(w->border);
+    w->border_color = create_color_button(
+            c, container, NULL, UPDATE_STYLES, NULL, &s->border_color);
+    w->margin = create_spin_button(
+            c, vbox, sg, UPDATE_STYLES | UPDATE_SIZE, "Margin:", &s->margin, 0, 100);
+    w->padding = create_spin_button(
+            c, vbox, sg, UPDATE_STYLES | UPDATE_SIZE, "Padding:", &s->padding, 0, 100);
     gtk_box_pack_start(GTK_BOX(vbox), 
-            gtk_separator_new(GTK_ORIENTATION_HORIZONTAL), FALSE, FALSE, 4);
-
-    // Stereo
-    create_check_button(c, vbox, sg, UPDATE_ALL, "Stereo", &s->stereo);
-
-    create_spin_button(c, vbox, sg, UPDATE_NONE, "Smoothing (%):", &s->monstercat, 0, 100);
-    create_check_button(c, vbox, sg, UPDATE_NONE, "Waves", &s->waves);
-    create_spin_button(c, vbox, sg, UPDATE_ALL, "Noise Reduction (%):", &s->noise_reduction, 0, 100);
+            gtk_separator_new(GTK_ORIENTATION_VERTICAL), FALSE, FALSE, 4);
+    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    w->background = create_color_button(
+            c, hbox, sg, UPDATE_STYLES, "Background:", &s->background);
+    w->foreground = create_color_button(
+            c, hbox, NULL, UPDATE_COLORS, "Foreground:", &s->foreground);
+    gtk_widget_set_hexpand(w->foreground, TRUE);
+    gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
 
     // Colors
+    sg = gtk_size_group_new(GTK_SIZE_GROUP_HORIZONTAL);
     GtkWidget *vbox2 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
     gtk_container_set_border_width(GTK_CONTAINER(vbox2), 8);
-    sg = gtk_size_group_new(GTK_SIZE_GROUP_HORIZONTAL);
-    create_color_button(
-            c, vbox2, sg, UPDATE_STYLES, "Background:", &s->background);
-    create_color_button(
-            c, vbox2, sg, UPDATE_COLORS, "Foreground:", &s->foreground);
-    create_color_button(
-            c, vbox2, sg, UPDATE_STYLES, "Border:", &s->border_color);
-    gtk_box_pack_start(GTK_BOX(vbox2), 
-            gtk_separator_new(GTK_ORIENTATION_HORIZONTAL), FALSE, FALSE, 4);
+    hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    GtkWidget *vbox2a = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
 
     // Gradient Colors
-    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    GtkWidget *vbox2a = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-    create_check_button(
+    w->gradient = create_check_button(
             c, vbox2a, sg, UPDATE_COLORS, "Gradient", &s->gradient);
     gchar *text;
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < GRADIENT_COLOR_COUNT; i++) {
         text = g_strdup_printf("Color %d:", i + 1);
-        create_color_button(c, vbox2a, sg, UPDATE_COLORS, text, 
-                &s->gradient_colors[i]);
+        w->gradient_colors[i] = create_color_button(c, vbox2a, sg, 
+                UPDATE_COLORS, text, &s->gradient_colors[i]);
         g_free(text);
     }
 
     // Horizontal Gradient Colors
     GtkWidget *vbox2b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-    create_check_button(c, vbox2b, sg, UPDATE_COLORS, 
+    w->horizontal_gradient = create_check_button(c, vbox2b, sg, UPDATE_COLORS, 
             "Horizontal Gradient", &s->horizontal_gradient);
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < GRADIENT_COLOR_COUNT; i++) {
         text = g_strdup_printf("Color %d:", i + 1);
-        create_color_button(c, vbox2b, sg, UPDATE_COLORS, text, 
-                &s->horizontal_gradient_colors[i]);
+        w->horizontal_gradient_colors[i] = create_color_button(c, vbox2b, sg, 
+                UPDATE_COLORS, text, &s->horizontal_gradient_colors[i]);
         g_free(text);
     }
     gtk_box_pack_start(GTK_BOX(hbox), GTK_WIDGET(vbox2a), FALSE, FALSE, 0);
@@ -453,7 +658,8 @@ void plugin_configure (XfcePanelPlugin *plugin, CavaPlugin *c) {
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     GtkWidget *vbox3 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
     gtk_container_set_border_width(GTK_CONTAINER(vbox3), 8);
-    create_check_button(c, hbox, NULL, UPDATE_NONE, "Enable", &s->equalizer);
+    w->equalizer = create_check_button(
+            c, hbox, NULL, UPDATE_NONE, "Enable", &s->equalizer);
     create_reset_button(c, hbox, "Reset", reset_equalizer_button);
     gtk_box_pack_start(GTK_BOX(vbox3), GTK_WIDGET(hbox), FALSE, FALSE, 0);
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
@@ -461,10 +667,36 @@ void plugin_configure (XfcePanelPlugin *plugin, CavaPlugin *c) {
     for (int i = 0; i < EQUALIZER_KEY_COUNT; i++) {
         freq = logspace(s->lower_cutoff_freq, s->higher_cutoff_freq, i, 
                 EQUALIZER_KEY_COUNT);
-        c->equalizer_scales[i] = create_scale(c, hbox, sg, UPDATE_NONE, NULL, 
+        text = g_strdup_printf("%d", (int)freq);
+        w->equalizer_keys[i] = create_scale(c, hbox, sg, UPDATE_NONE, NULL, 
                 &s->equalizer_keys[i], 0.0, EQUALIZER_MAX, 0.1);
+        g_free(text);
     }
     gtk_box_pack_start(GTK_BOX(vbox3), GTK_WIDGET(hbox), TRUE, TRUE, 0);
+
+    // Advanced
+    GtkWidget *vbox4 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_container_set_border_width(GTK_CONTAINER(vbox4), 8);
+    w->framerate = create_spin_button(
+            c, vbox4, sg, UPDATE_CONFIG, "Frame Rate:", &s->framerate, 1, 1000);
+    w->sleep_timer = create_spin_button(
+            c, vbox4, sg, UPDATE_NONE, "Sleep Timer (s):", &s->sleep_timer, 0, 1000);
+    w->sensitivity = create_spin_button(
+            c, vbox4, sg, UPDATE_NONE, "Sensitivity (%):", &s->sensitivity, 1, 1000);
+    w->lower_cutoff_freq = create_spin_button(
+            c, vbox4, sg, UPDATE_CONFIG, "Low frequency (Hz):", &s->lower_cutoff_freq, 0, 22000);
+    w->higher_cutoff_freq = create_spin_button(
+            c, vbox4, sg, UPDATE_CONFIG, "High frequency (Hz):", &s->higher_cutoff_freq, 0, 22000);
+    gtk_box_pack_start(GTK_BOX(vbox4), 
+            gtk_separator_new(GTK_ORIENTATION_VERTICAL), FALSE, FALSE, 4);
+    w->stereo = create_check_button(
+            c, vbox4, sg, UPDATE_ALL, "Stereo", &s->stereo);
+    w->monstercat = create_spin_button(
+            c, vbox4, sg, UPDATE_NONE, "Smoothing (%):", &s->monstercat, 0, 100);
+    w->waves = create_check_button(
+            c, vbox4, sg, UPDATE_NONE, "Waves", &s->waves);
+    w->noise_reduction = create_spin_button(
+            c, vbox4, sg, UPDATE_ALL, "Noise Reduction (%):", &s->noise_reduction, 0, 100);
 
     // Tab Pages
     GtkWidget* notebook = gtk_notebook_new();
@@ -473,22 +705,43 @@ void plugin_configure (XfcePanelPlugin *plugin, CavaPlugin *c) {
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), 
             GTK_WIDGET(vbox), gtk_label_new("Bars"));
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), 
-            GTK_WIDGET(vbox2), gtk_label_new("Colors"));
+            GTK_WIDGET(vbox2), gtk_label_new("Gradients"));
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), 
             GTK_WIDGET(vbox3), gtk_label_new("Equalizer"));
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), 
+            GTK_WIDGET(vbox4), gtk_label_new("Advanced"));
     gtk_widget_set_vexpand(vbox3, TRUE);
 
     GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
 
-    gtk_container_add(GTK_CONTAINER(content), notebook);
+    GtkWidget *main = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_container_set_border_width(GTK_CONTAINER(main), 8);
 
-    gtk_widget_show_all(notebook);
+    // Profile
+    w->profile = gtk_combo_box_text_new();
+    populate_profile_combo_box(c);
+    hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    label_and_pack_widget(main, hbox, w->profile, NULL, "Profile:", 0.0, FALSE);
+    w->del_profile = gtk_button_new_with_label("-");
+    gtk_widget_set_sensitive(GTK_WIDGET(w->del_profile), c->profile_count > 1);
+    gtk_box_pack_start(GTK_BOX(hbox), GTK_WIDGET(w->del_profile), FALSE, FALSE, 0);
+    g_signal_connect(
+            w->del_profile, "clicked", G_CALLBACK(del_profile_button_clicked), c);
+    w->new_profile = gtk_button_new_with_label("+");
+    gtk_box_pack_start(
+            GTK_BOX(hbox), GTK_WIDGET(w->new_profile), FALSE, FALSE, 0);
+    g_signal_connect(
+            w->new_profile, "clicked", G_CALLBACK(new_profile_button_clicked), c);
+
+    // Done
+    gtk_box_pack_start(GTK_BOX(main), notebook, FALSE, FALSE, 8);
+    gtk_container_add(GTK_CONTAINER(content), main);
+
+    gtk_widget_show_all(main);
 
     /* show the entire dialog */
     gtk_widget_show (dialog);
 }
-
-
 
 void plugin_about (XfcePanelPlugin *plugin) {
     /* about dialog code. you can use the GtkAboutDialog
@@ -504,7 +757,7 @@ void plugin_about (XfcePanelPlugin *plugin) {
             "license",        xfce_get_license_text (XFCE_LICENSE_TEXT_GPL),
             "version",        VERSION_FULL,
             "program-name",   PACKAGE_NAME,
-            "comments",       _("This is a cava plugin"),
+            "comments",       _("CAVA plugin for xfce4-panel"),
             "website",        PLUGIN_WEBSITE,
             "copyright",      "Copyright \xc2\xa9 2006-" COPYRIGHT_YEAR " The Xfce development team",
             "authors",        auth,

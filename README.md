@@ -2,7 +2,7 @@
 
 [CAVA](https://github.com/karlstav/cava) plugin for xfce4-panel. This is a work in progress. Only [PipeWire](https://github.com/PipeWire/pipewire) and [PulseAudio](https://github.com/pulseaudio/pulseaudio) are currently supported.
 
-![plugin](https://github.com/kreddkrikk/xfce4-cava-plugin/blob/main/cava.gif "plugin")
+![plugin](https://github.com/kreddkrikk/xfce4-cava-plugin/blob/main/cava.gif "plugin") ![plugin](https://github.com/kreddkrikk/xfce4-cava-plugin/blob/main/cava2.gif "plugin")
 
 ----
 
@@ -29,8 +29,10 @@ From source code repository:
 
     % ninja uninstall -C build
 
+### Profiles
+
+This plugin uses profiles for fast switching between themes. Profiles are written to `~/.config/cava/profiles/` in the Xfce4 config file format.
+
 ### TODO
 
 - Improve error checking
-- Add theme support
-- Add profile support

@@ -39,8 +39,8 @@ const gint default_bars = 32;
 const gint default_bar_width = 2;
 const gint default_bar_spacing = 1;
 const gint default_max_height = 100;
-const gint default_lower_cutoff_freq = 50;
-const gint default_higher_cutoff_freq = 10000;
+const gint default_lower_cutoff_freq = 60;
+const gint default_higher_cutoff_freq = 16000;
 const gint default_sleep_timer = 1;
 const gint default_method = INPUT_PIPEWIRE; //INPUT_PULSE;
 gchar *default_source = "auto";
@@ -51,8 +51,8 @@ const gint default_autoconnect = 2;
 const gint default_active = 0;
 const gint default_remix = 1;
 const gint default_virtual = 1;
-const gint default_orientation = ORIENT_BOTTOM;
-const gint default_stereo = 1;
+const gint default_orientation = ORIENT_SPLIT_H;
+const gint default_stereo = 0;
 const gint default_mono_option = AVERAGE;
 const gint default_reverse = 0;
 const gint default_show_idle_bar_heads = 0;
@@ -68,7 +68,8 @@ gchar *default_gradient_colors[] = {
     "#cca633",
     "#cc8033",
     "#cc5933",
-    "#cc3333"
+    "#cc3333",
+    NULL
 };
 const gint default_horizontal_gradient = 0;
 gchar *default_horizontal_gradient_colors[] = {
@@ -79,23 +80,22 @@ gchar *default_horizontal_gradient_colors[] = {
     "#cbc7d8",
     "#8db7d2",
     "#5e62a9",
-    "#434279"
+    "#434279",
+    NULL
 };
 const gint default_blend_direction = ORIENT_BOTTOM;
 gchar *default_theme = "none";
 const gint default_integral = 77;
 const gint default_monstercat = 0;
 const gint default_waves = 0;
-const gint default_gravity = 100;
-const gint default_ignore = 0;
 const gint default_noise_reduction = 77;
 const gint default_equalizer = 0;
 const gdouble default_equalizer_key = 1.0;
 const gint default_border = 0;
 gchar *default_border_color = "#3fffffff";
-const gint default_margin = 0;
+const gint default_margin = 10;
 const gint default_padding = 0;
-gchar *default_css = "#display { background: initial; border: 0; margin: 0; padding: 0; }";
+gchar *default_profile = "cava";
 
 /* prototypes */
 static void plugin_construct(XfcePanelPlugin *plugin);
@@ -103,18 +103,75 @@ static void plugin_construct(XfcePanelPlugin *plugin);
 /* register the plugin */
 XFCE_PANEL_PLUGIN_REGISTER(plugin_construct);
 
-void plugin_save(XfcePanelPlugin *plugin, CavaPlugin *c) {
+gchar *get_profile_dir(void) {
+    gchar *dir = g_strdup_printf(
+            "%s/.config/cava/profiles", g_get_home_dir());
+    if (!g_file_test(dir, G_FILE_TEST_IS_DIR)) {
+        if (g_mkdir_with_parents(dir, 0755) == -1) {
+            printf("Failed to create profile directory.\n");
+            g_free(dir);
+            return NULL;
+        }
+    }
+    return dir;
+}
+
+gchar *get_profile_path(gchar *profile) {
+    if (profile == NULL)
+        return NULL;
+    gchar *dir = get_profile_dir();
+    if (dir == NULL)
+        return NULL;
+    return g_strdup_printf("%s/%s.rc", dir, profile);
+}
+
+void plugin_save(CavaPlugin *c) {
     XfceRc *rc;
-    gchar  *file;
+    gchar *file;
     CavaSettings *s;
 
-    /* get the config file location */
-    file = xfce_panel_plugin_save_location(plugin, TRUE);
+    s = &c->settings;
+
+    file = xfce_panel_plugin_save_location(c->plugin, TRUE);
 
     if (G_UNLIKELY(file == NULL))
     {
         DBG("Failed to open config file");
         return;
+    }
+
+    rc = xfce_rc_simple_open(file, FALSE);
+    g_free(file);
+
+    if (G_LIKELY(rc != NULL))
+    {
+        DBG(".");
+        xfce_rc_write_entry(rc, "profile", s->profile);
+        xfce_rc_close(rc);
+    }
+}
+
+void profile_save(CavaPlugin *c) {
+    XfceRc *rc;
+    gchar *file;
+    CavaSettings *s;
+
+    s = &c->settings;
+
+    file = get_profile_path(s->profile);
+
+    if (G_UNLIKELY(file == NULL))
+    {
+        DBG("Failed to open profile");
+        return;
+    }
+
+    if (!g_file_test(file, G_FILE_TEST_EXISTS)) {
+        if (creat(file, 0644) == -1) {
+            DBG("Failed to create profile.");
+            g_free(file);
+            return;
+        }
     }
 
     /* open the config file, read/write */
@@ -126,7 +183,6 @@ void plugin_save(XfcePanelPlugin *plugin, CavaPlugin *c) {
         /* save the settings */
         DBG(".");
 
-        s = &c->settings;
         xfce_rc_write_int_entry(rc, "framerate", s->framerate);
         xfce_rc_write_int_entry(rc, "autosens", s->autosens);
         xfce_rc_write_int_entry(rc, "overshoot", s->overshoot);
@@ -156,14 +212,14 @@ void plugin_save(XfcePanelPlugin *plugin, CavaPlugin *c) {
         xfce_rc_write_entry(rc, "background", s->background);
         xfce_rc_write_entry(rc, "foreground", s->foreground);
         xfce_rc_write_int_entry(rc, "gradient", s->gradient);
-        gchar **colors = g_new0(gchar*, 8 + 1);
-        for (int i = 0; i < 8; i++)
+        gchar **colors = g_new0(gchar*, GRADIENT_COLOR_COUNT + 1);
+        for (int i = 0; i < GRADIENT_COLOR_COUNT; i++)
             colors[i] = g_strdup(s->gradient_colors[i]);
         xfce_rc_write_list_entry(rc, "gradient_colors", colors, ",");
         g_strfreev(colors);
         xfce_rc_write_int_entry(rc, "horizontal_gradient", s->horizontal_gradient);
-        colors = g_new0(gchar*, 8 + 1);
-        for (int i = 0; i < 8; i++)
+        colors = g_new0(gchar*, GRADIENT_COLOR_COUNT + 1);
+        for (int i = 0; i < GRADIENT_COLOR_COUNT; i++)
             colors[i] = g_strdup(s->horizontal_gradient_colors[i]);
         xfce_rc_write_list_entry(rc, "horizontal_gradient_colors", colors, ",");
         g_strfreev(colors);
@@ -171,8 +227,6 @@ void plugin_save(XfcePanelPlugin *plugin, CavaPlugin *c) {
         xfce_rc_write_entry(rc, "theme", s->theme);
         xfce_rc_write_int_entry(rc, "monstercat", s->monstercat);
         xfce_rc_write_int_entry(rc, "waves", s->waves);
-        xfce_rc_write_int_entry(rc, "gravity", s->gravity);
-        xfce_rc_write_int_entry(rc, "ignore", s->ignore);
         xfce_rc_write_int_entry(rc, "noise_reduction", s->noise_reduction);
         xfce_rc_write_int_entry(rc, "equalizer", s->equalizer);
         gchar **keys = g_new0(gchar*, EQUALIZER_KEY_COUNT + 1);
@@ -184,22 +238,54 @@ void plugin_save(XfcePanelPlugin *plugin, CavaPlugin *c) {
         xfce_rc_write_entry(rc, "border_color", s->border_color);
         xfce_rc_write_int_entry(rc, "margin", s->margin);
         xfce_rc_write_int_entry(rc, "padding", s->padding);
-        xfce_rc_write_entry(rc, "css", s->css);
 
         /* close the rc file */
         xfce_rc_close(rc);
     }
 }
 
-static void plugin_read(CavaPlugin *c) {
-    XfceRc      *rc;
-    gchar       *file;
+void plugin_read(CavaPlugin *c) {
+    XfceRc *rc;
+    gchar *file;
     CavaSettings *s;
 
     s = &c->settings;
 
+    DBG(".");
+
     /* get the plugin config file location */
     file = xfce_panel_plugin_save_location(c->plugin, TRUE);
+    if (G_LIKELY(file != NULL))
+    {
+        /* open the config file, readonly */
+        rc = xfce_rc_simple_open(file, TRUE);
+
+        /* cleanup */
+        g_free(file);
+
+        if (G_LIKELY(rc != NULL))
+        {
+            s->profile = g_strdup(xfce_rc_read_entry(rc, "profile", default_profile));
+            xfce_rc_close(rc);
+            return;
+        }
+    }
+
+    DBG("Applying default settings");
+
+    s->profile = g_strdup(default_profile);
+}
+
+void profile_read(CavaPlugin *c) {
+    XfceRc *rc;
+    gchar *file;
+    CavaSettings *s;
+
+    s = &c->settings;
+
+    DBG(".");
+
+    file = get_profile_path(s->profile);
 
     if (G_LIKELY(file != NULL))
     {
@@ -242,14 +328,20 @@ static void plugin_read(CavaPlugin *c) {
             s->foreground = g_strdup(xfce_rc_read_entry(rc, "foreground", default_foreground));
             s->gradient = xfce_rc_read_int_entry(rc, "gradient", default_gradient);
             s->gradient_colors = g_strdupv(xfce_rc_read_list_entry(rc, "gradient_colors", ","));
+            if (s->gradient_colors == NULL || 
+                    g_strv_length(s->gradient_colors) < GRADIENT_COLOR_COUNT) {
+                s->gradient_colors = g_strdupv(default_gradient_colors);
+            }
             s->horizontal_gradient = xfce_rc_read_int_entry(rc, "horizontal_gradient", default_horizontal_gradient);
             s->horizontal_gradient_colors = g_strdupv(xfce_rc_read_list_entry(rc, "horizontal_gradient_colors", ","));
+            if (s->horizontal_gradient_colors == NULL || 
+                    g_strv_length(s->horizontal_gradient_colors) < GRADIENT_COLOR_COUNT) {
+                s->horizontal_gradient_colors = g_strdupv(default_horizontal_gradient_colors);
+            }
             s->blend_direction = xfce_rc_read_int_entry(rc, "blend_direction", default_blend_direction);
             s->theme = g_strdup(xfce_rc_read_entry(rc, "theme", default_theme));
             s->monstercat = xfce_rc_read_int_entry(rc, "monstercat", default_monstercat);
             s->waves = xfce_rc_read_int_entry(rc, "waves", default_waves);
-            s->gravity = xfce_rc_read_int_entry(rc, "gravity", default_gravity);
-            s->ignore = xfce_rc_read_int_entry(rc, "ignore", default_ignore);
             s->noise_reduction = xfce_rc_read_int_entry(rc, "noise_reduction", default_noise_reduction);
             s->equalizer = xfce_rc_read_int_entry(rc, "equalizer", default_equalizer);
             gchar **keys = xfce_rc_read_list_entry(rc, "equalizer_keys", ",");
@@ -268,7 +360,6 @@ static void plugin_read(CavaPlugin *c) {
             s->border_color = g_strdup(xfce_rc_read_entry(rc, "border_color", default_border_color));
             s->margin = xfce_rc_read_int_entry(rc, "margin", default_margin);
             s->padding = xfce_rc_read_int_entry(rc, "padding", default_padding);
-            s->css = g_strdup(xfce_rc_read_entry(rc, "css", default_css));
 
             /* cleanup */
             xfce_rc_close(rc);
@@ -318,8 +409,6 @@ static void plugin_read(CavaPlugin *c) {
     s->theme = g_strdup(default_theme);
     s->monstercat = default_monstercat;
     s->waves = default_waves;
-    s->gravity = default_gravity;
-    s->ignore = default_ignore;
     s->noise_reduction = default_noise_reduction;
     s->equalizer = default_equalizer;
     for (int i = 0; i < EQUALIZER_KEY_COUNT; i++)
@@ -328,7 +417,6 @@ static void plugin_read(CavaPlugin *c) {
     s->border_color = g_strdup(default_border_color);
     s->margin = default_margin;
     s->padding = default_padding;
-    s->css = g_strdup(default_css);
 }
 
 // We can initialize CAVA once the display's size has been fully allocated
@@ -352,6 +440,7 @@ static CavaPlugin *plugin_new(XfcePanelPlugin *plugin) {
 
     /* read the user settings */
     plugin_read(c);
+    profile_read(c);
 
     /* get the current orientation */
     orientation = xfce_panel_plugin_get_orientation(plugin);
@@ -395,12 +484,12 @@ static void plugin_free(XfcePanelPlugin *plugin, CavaPlugin *c) {
     if (G_LIKELY(s->background != NULL)) g_free(s->background);
     if (G_LIKELY(s->foreground != NULL)) g_free(s->foreground);
     if (G_LIKELY(s->border_color != NULL)) g_free(s->border_color);
-    if (G_LIKELY(s->css != NULL)) g_free(s->css);
     if (G_LIKELY(s->theme != NULL)) g_free(s->theme);
     if (G_LIKELY(s->gradient_colors != NULL)) 
         g_strfreev(s->gradient_colors);
     if (G_LIKELY(s->horizontal_gradient_colors != NULL)) 
         g_strfreev(s->horizontal_gradient_colors);
+    if (G_LIKELY(s->profile != NULL)) g_free(s->profile);
 
     /* free the plugin structure */
     g_slice_free(CavaPlugin, c);
@@ -415,20 +504,43 @@ static void plugin_orientation_changed(XfcePanelPlugin *plugin,
 void resize_display(CavaPlugin *c) {
     CavaSettings *s;
     GtkOrientation orientation;
-    int size, plugin_size, width, height;
+    int size, plugin_size, adjusted_size, width, height;
 
     s = &c->settings;
     orientation = xfce_panel_plugin_get_orientation(c->plugin);
     size = s->bars * (s->bar_width + s->bar_spacing) - s->bar_spacing;
     plugin_size = xfce_panel_plugin_get_size(c->plugin);
+    adjusted_size = plugin_size - (s->margin * 2) - (s->padding * 2);
 
     if (orientation == GTK_ORIENTATION_HORIZONTAL) {
-        width = size;
+        switch (s->orientation) {
+            case ORIENT_LEFT:
+            case ORIENT_RIGHT:
+            case ORIENT_SPLIT_V:
+                width = plugin_size * 2;
+                c->y_offset = (adjusted_size / 2) - 
+                    ((s->bars * (s->bar_width + s->bar_spacing)) / 2);
+                break;
+            default:
+                width = size;
+                break;
+        }
         height = plugin_size;
     }
     else {
         width = plugin_size;
-        height = size;
+        switch (s->orientation) {
+            case ORIENT_TOP:
+            case ORIENT_BOTTOM:
+            case ORIENT_SPLIT_H:
+                height = plugin_size * 2;
+                c->x_offset = (adjusted_size / 2) - 
+                    ((s->bars * (s->bar_width + s->bar_spacing)) / 2);
+                break;
+            default:
+                height = size;
+                break;
+        }
     }
 
     gtk_widget_set_size_request(c->display, width, height);
@@ -466,6 +578,7 @@ void restyle_display(CavaPlugin *c) {
     // done
     g_free(border_color);
     g_free(background);
+    g_free(css);
 }
 
 void reset_equalizer(CavaPlugin *c) {

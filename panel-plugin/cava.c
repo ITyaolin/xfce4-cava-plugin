@@ -62,11 +62,11 @@ void config_colors(CavaPlugin *c) {
         if (s->orientation == ORIENT_SPLIT_H || 
                 s->orientation == ORIENT_SPLIT_V) {
             offset = step = 0.0625;
-            for (int n = 0; n < 16; n++) {
-                if (n >= 8)
-                    i = n - 8;
+            for (int n = 0; n < GRADIENT_COLOR_COUNT * 2; n++) {
+                if (n >= GRADIENT_COLOR_COUNT)
+                    i = n - GRADIENT_COLOR_COUNT;
                 else
-                    i = 7 - n;
+                    i = GRADIENT_COLOR_COUNT - 1 - n;
                 rgba_parse(&fg, s->gradient_colors[i]);
                 cairo_pattern_add_color_stop_rgba(c->foreground, offset, 
                         fg.red, fg.green, fg.blue, fg.alpha);
@@ -75,7 +75,7 @@ void config_colors(CavaPlugin *c) {
         }
         else {
             offset = step = 0.125;
-            for (int n = 0; n < 8; n++) {
+            for (int n = 0; n < GRADIENT_COLOR_COUNT; n++) {
                 rgba_parse(&fg, s->gradient_colors[n]);
                 cairo_pattern_add_color_stop_rgba(c->foreground, offset, 
                         fg.red, fg.green, fg.blue, fg.alpha);
@@ -86,7 +86,7 @@ void config_colors(CavaPlugin *c) {
     else if (s->horizontal_gradient) {
         c->foreground = cairo_pattern_create_linear(0, 0, alloc.width, 0);
         offset = 0.125;
-        for (int n = 0; n < 8; n++) {
+        for (int n = 0; n < GRADIENT_COLOR_COUNT; n++) {
             rgba_parse(&fg, s->horizontal_gradient_colors[n]);
             cairo_pattern_add_color_stop_rgba(c->foreground, offset, 
                     fg.red, fg.green, fg.blue, fg.alpha);
@@ -104,7 +104,7 @@ void config_colors(CavaPlugin *c) {
 static gboolean draw_cava(GtkWidget *display, cairo_t *cr, CavaPlugin *c) {
     CavaSettings *s;
     GtkAllocation alloc;
-    gint x, y, w, h, bar_width, bar_spacing;
+    gint x, y, w, h, r, bar_width, bar_spacing;
 
     // bar size
     s = &c->settings;
@@ -133,6 +133,12 @@ static gboolean draw_cava(GtkWidget *display, cairo_t *cr, CavaPlugin *c) {
                 w = bar_width;
                 h = bars[n];
                 break;
+            case ORIENT_SPLIT_H:
+                x = n * (bar_width + bar_spacing);
+                y = (alloc.height / 2) - (bars[n] / 2);
+                w = bar_width;
+                h = bars[n];
+                break;
             case ORIENT_LEFT:
                 x = 0;
                 y = n * (bar_width + bar_spacing);
@@ -145,12 +151,6 @@ static gboolean draw_cava(GtkWidget *display, cairo_t *cr, CavaPlugin *c) {
                 w = bars[n];
                 h = bar_width;
                 break;
-            case ORIENT_SPLIT_H:
-                x = n * (bar_width + bar_spacing);
-                y = (alloc.height / 2) - (bars[n] / 2);
-                w = bar_width;
-                h = bars[n];
-                break;
             case ORIENT_SPLIT_V:
                 x = (alloc.width / 2) - (bars[n] / 2);
                 y = n * (bar_width + bar_spacing);
@@ -158,7 +158,20 @@ static gboolean draw_cava(GtkWidget *display, cairo_t *cr, CavaPlugin *c) {
                 h = bar_width;
                 break;
         }
-        cairo_rectangle(cr, x, y, w, h);
+        x += c->x_offset;
+        y += c->y_offset;
+        if (s->bar_shape == BAR_SHAPE_RECTANGLE) {
+            cairo_rectangle(cr, x, y, w, h);
+        }
+        else if (s->bar_shape == BAR_SHAPE_OBLONG) {
+            r = bar_width / 2;
+            cairo_new_sub_path(cr);
+            cairo_arc(cr, x + r, y + r, r, M_PI, 3 * M_PI / 2);
+            cairo_arc(cr, x + w - r, y + r, r, 3 * M_PI / 2, 2 * M_PI);
+            cairo_arc(cr, x + w - r, y + h - r, r, 0, M_PI / 2);
+            cairo_arc(cr, x + r, y + h - r, r, M_PI / 2, M_PI);
+            cairo_close_path(cr);
+        }
         cairo_fill(cr);
     }
 
