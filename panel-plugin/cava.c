@@ -104,7 +104,7 @@ void config_colors(CavaPlugin *c) {
 static gboolean draw_cava(GtkWidget *display, cairo_t *cr, CavaPlugin *c) {
     CavaSettings *s;
     GtkAllocation alloc;
-    gint x, y, w, h, r, bar_width, bar_spacing;
+    gint x, y, w, h, rx, ry, r, bar_width, bar_spacing;
 
     // bar size
     s = &c->settings;
@@ -164,12 +164,21 @@ static gboolean draw_cava(GtkWidget *display, cairo_t *cr, CavaPlugin *c) {
             cairo_rectangle(cr, x, y, w, h);
         }
         else if (s->bar_shape == BAR_SHAPE_OBLONG) {
-            r = bar_width / 2;
+            if (ORIENT_HORIZONTAL(s->orientation)) {
+                r = MIN(w / 2, bar_width / 2);
+                rx = MIN(w / 2, bar_width / 2);
+                ry = bar_width / 2;
+            }
+            else {
+                r = MIN(h / 2, bar_width / 2);
+                rx = bar_width / 2;
+                ry = MIN(h / 2, bar_width / 2);
+            }
             cairo_new_sub_path(cr);
-            cairo_arc(cr, x + r, y + r, r, M_PI, 3 * M_PI / 2);
-            cairo_arc(cr, x + w - r, y + r, r, 3 * M_PI / 2, 2 * M_PI);
-            cairo_arc(cr, x + w - r, y + h - r, r, 0, M_PI / 2);
-            cairo_arc(cr, x + r, y + h - r, r, M_PI / 2, M_PI);
+            cairo_arc(cr, x + rx, y + ry, r, M_PI, 3 * M_PI / 2);
+            cairo_arc(cr, x + w - rx, y + ry, r, 3 * M_PI / 2, 2 * M_PI);
+            cairo_arc(cr, x + w - rx, y + h - ry, r, 0, M_PI / 2);
+            cairo_arc(cr, x + rx, y + h - ry, r, M_PI / 2, M_PI);
             cairo_close_path(cr);
         }
         cairo_fill(cr);

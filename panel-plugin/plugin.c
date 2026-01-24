@@ -518,33 +518,25 @@ void resize_display(CavaPlugin *c) {
     adjusted_size = plugin_size - (s->margin * 2) - (s->padding * 2);
 
     if (orientation == GTK_ORIENTATION_HORIZONTAL) {
-        switch (s->orientation) {
-            case ORIENT_LEFT:
-            case ORIENT_RIGHT:
-            case ORIENT_SPLIT_V:
-                width = plugin_size * 2;
-                c->y_offset = (adjusted_size / 2) - 
-                    ((s->bars * (s->bar_width + s->bar_spacing)) / 2);
-                break;
-            default:
-                width = size;
-                break;
+        if (ORIENT_HORIZONTAL(s->orientation)) {
+            width = plugin_size * 2;
+            c->y_offset = (adjusted_size / 2) - 
+                ((s->bars * (s->bar_width + s->bar_spacing)) / 2);
+        }
+        else {
+            width = size;
         }
         height = plugin_size;
     }
     else {
         width = plugin_size;
-        switch (s->orientation) {
-            case ORIENT_TOP:
-            case ORIENT_BOTTOM:
-            case ORIENT_SPLIT_H:
-                height = plugin_size * 2;
-                c->x_offset = (adjusted_size / 2) - 
-                    ((s->bars * (s->bar_width + s->bar_spacing)) / 2);
-                break;
-            default:
-                height = size;
-                break;
+        if (ORIENT_VERTICAL(s->orientation)) {
+            height = plugin_size * 2;
+            c->x_offset = (adjusted_size / 2) - 
+                ((s->bars * (s->bar_width + s->bar_spacing)) / 2);
+        }
+        else {
+            height = size;
         }
     }
 

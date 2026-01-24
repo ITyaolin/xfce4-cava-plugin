@@ -50,6 +50,12 @@ enum orientation {
     ORIENT_SPLIT_V,
 };
 
+#define ORIENT_VERTICAL(o) \
+    (((o) == ORIENT_BOTTOM) || ((o) == ORIENT_TOP) || ((o) == ORIENT_SPLIT_H))
+
+#define ORIENT_HORIZONTAL(o) \
+    (((o) == ORIENT_LEFT) || ((o) == ORIENT_RIGHT) || ((o) == ORIENT_SPLIT_V))
+
 enum bar_shape {
     BAR_SHAPE_RECTANGLE,
     BAR_SHAPE_OBLONG,
