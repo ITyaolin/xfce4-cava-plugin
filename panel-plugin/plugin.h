@@ -123,6 +123,7 @@ typedef struct {
     GtkWidget  *profile;
     GtkWidget  *new_profile;
     GtkWidget  *del_profile;
+    GtkWidget  *ren_profile;
     /* general */
     GtkWidget  *framerate;
     GtkWidget  *sensitivity;

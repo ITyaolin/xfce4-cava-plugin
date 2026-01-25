@@ -281,7 +281,7 @@ static void profile_combo_box_changed(GtkComboBoxText *self, CavaPlugin *c) {
     load_settings(c);
 }
 
-static gboolean new_profile_entry_key_press(GtkWidget *self, 
+static gboolean entry_key_press(GtkWidget *self, 
         GdkEventKey *event, CavaPlugin *c) {
     GtkWidget *dialog = gtk_widget_get_toplevel(GTK_WIDGET(self));
     if (event->keyval == GDK_KEY_Return) {
@@ -290,10 +290,10 @@ static gboolean new_profile_entry_key_press(GtkWidget *self,
     return FALSE;
 }
 
-static gint show_message_box(gchar *title, gchar *message, 
+static gint show_message_box(GtkWidget *self, gchar *title, gchar *message, 
         GtkButtonsType buttons) {
     /* create dialog */
-    GtkWidget *parent_window = gtk_widget_get_toplevel(NULL);
+    GtkWidget *parent_window = gtk_widget_get_toplevel(self);
     GtkWidget *dialog = gtk_message_dialog_new(
             GTK_WINDOW(parent_window),
             GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
@@ -305,19 +305,52 @@ static gint show_message_box(gchar *title, gchar *message,
     return result;
 }
 
+static gchar *show_dialog_with_entry(GtkWidget *self, CavaPlugin *c, 
+        gchar *title, gchar *label_text, gchar *entry_text) {
+    /* create dialog */
+    GtkWidget *entry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(entry), entry_text);
+    GtkWidget *parent_window = gtk_widget_get_toplevel(GTK_WIDGET(self));
+    GtkWidget *dialog = gtk_dialog_new_with_buttons(
+            title,
+            GTK_WINDOW(parent_window), 
+            GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+            "OK", GTK_RESPONSE_OK,
+            "Cancel", GTK_RESPONSE_CANCEL,
+            NULL);
+    gtk_window_set_resizable(GTK_WINDOW(dialog), FALSE);
+    gtk_container_set_border_width(GTK_CONTAINER(dialog), 8);
+    g_signal_connect(entry, "key-press-event", G_CALLBACK(entry_key_press), c);
+    GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    GtkWidget *label = gtk_label_new(label_text);
+    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_box_pack_start(GTK_BOX(hbox), label, FALSE, FALSE, 8);
+    gtk_box_pack_start(GTK_BOX(hbox), entry, FALSE, FALSE, 8);
+    gtk_box_pack_end(GTK_BOX(content_area), hbox, FALSE, FALSE, 8);
+    gtk_widget_show_all(dialog);
+    gint result = gtk_dialog_run(GTK_DIALOG(dialog));
+    gchar *text = NULL;
+    if (result == GTK_RESPONSE_OK) {
+        text = g_strdup(gtk_entry_get_text(GTK_ENTRY(entry)));
+    }
+    gtk_widget_destroy(dialog);
+    return text;
+}
+
 static gboolean profile_exists(gchar *profile_name) {
     gchar *profile_path = get_profile_path(profile_name);
     return profile_path != NULL && g_file_test(
             profile_path, G_FILE_TEST_EXISTS);
 }
 
-static void add_new_profile(CavaPlugin *c, gchar *profile_name) {
+static void add_new_profile(GtkWidget *self, CavaPlugin *c, 
+        gchar *profile_name) {
     gint result;
     SettingWidgets *w = &c->widgets;
     if (profile_name[0] == '\0')
         return;
     if (profile_exists(profile_name)) {
-        result = show_message_box("Replace Profile?", 
+        result = show_message_box(GTK_WIDGET(self), "Replace Profile?", 
                 "A profile with this name already exists. Replace?", 
                 GTK_BUTTONS_YES_NO);
         if (result != GTK_RESPONSE_YES)
@@ -327,48 +360,59 @@ static void add_new_profile(CavaPlugin *c, gchar *profile_name) {
     c->settings.profile = profile_name;
     gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(w->profile), 
             profile_name, profile_name);
-    gtk_combo_box_set_active_id(
-            GTK_COMBO_BOX(w->profile), profile_name);
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(w->profile), profile_name);
     gtk_widget_set_sensitive(GTK_WIDGET(w->del_profile), TRUE);
+    profile_save(c);
+}
+
+static void rename_profile(GtkWidget *self, CavaPlugin *c,
+        gchar *profile_name) {
+    gint result;
+    SettingWidgets *w = &c->widgets;
+    if (profile_name[0] == '\0')
+        return;
+    if (g_strcmp0(c->settings.profile, profile_name) == 0)
+        return;
+    if (profile_exists(profile_name)) {
+        result = show_message_box(GTK_WIDGET(self), "Replace Profile?", 
+                "A profile with this name already exists. Replace?", 
+                GTK_BUTTONS_YES_NO);
+        if (result != GTK_RESPONSE_YES)
+            return;
+    }
+    gchar *new_profile_path = get_profile_path(profile_name);
+    if (new_profile_path == NULL)
+        return;
+    gchar *old_profile_path = get_profile_path(c->settings.profile);
+    if (old_profile_path == NULL)
+        return;
+
+    /* update profiles */
+    c->settings.profile = profile_name;
+    gint active = gtk_combo_box_get_active(GTK_COMBO_BOX(w->profile));
+    gtk_combo_box_text_remove(GTK_COMBO_BOX_TEXT(w->profile), active);
+    gtk_combo_box_text_insert(GTK_COMBO_BOX_TEXT(w->profile), 
+            active, profile_name, profile_name);
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(w->profile), profile_name);
+    rename(old_profile_path, new_profile_path);
     profile_save(c);
 }
 
 static void new_profile_button_clicked(GtkButton *self, CavaPlugin *c) {
     /* create dialog */
-    GtkWidget *parent_window = gtk_widget_get_toplevel(GTK_WIDGET(self));
-    GtkWidget *dialog = gtk_dialog_new_with_buttons(
-            "New Profile", 
-            GTK_WINDOW(parent_window), 
-            GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
-            "OK", GTK_RESPONSE_OK,
-            "Cancel", GTK_RESPONSE_CANCEL,
-            NULL);
-    gtk_window_set_resizable(GTK_WINDOW(dialog), FALSE);
-    gtk_container_set_border_width(GTK_CONTAINER(dialog), 8);
-    GtkWidget *entry = gtk_entry_new();
-    g_signal_connect(entry, "key-press-event", 
-            G_CALLBACK(new_profile_entry_key_press), c);
-    GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
-    GtkWidget *label = gtk_label_new("Profile Name:");
-    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    gtk_box_pack_start(GTK_BOX(hbox), label, FALSE, FALSE, 8);
-    gtk_box_pack_start(GTK_BOX(hbox), entry, FALSE, FALSE, 8);
-    gtk_box_pack_end(GTK_BOX(content_area), hbox, FALSE, FALSE, 8);
-    gtk_widget_show_all(dialog);
+    gchar *result = show_dialog_with_entry(GTK_WIDGET(self), c, 
+            "New Profile", "Profile name:", "");
 
     /* update profiles */
-    gchar *profile_name;
-    gint result = gtk_dialog_run(GTK_DIALOG(dialog));
-    profile_name = (gchar *)gtk_entry_get_text(GTK_ENTRY(entry));
-    if (result == GTK_RESPONSE_OK) {
-        add_new_profile(c, profile_name);
+    if (result != NULL) {
+        add_new_profile(GTK_WIDGET(self), c, result);
+        g_free(result);
     }
-    gtk_widget_destroy (dialog);
 }
 
 static void del_profile_button_clicked(GtkButton *self, CavaPlugin *c) {
     /* create dialog */
-    gint result = show_message_box("Delete Profile",
+    gint result = show_message_box(GTK_WIDGET(self), "Delete Profile",
             "Are you sure you want to delete the selected profile?\n"
             "This action cannot be undone.", GTK_BUTTONS_YES_NO);
 
@@ -385,6 +429,18 @@ static void del_profile_button_clicked(GtkButton *self, CavaPlugin *c) {
             gtk_widget_set_sensitive(GTK_WIDGET(self), c->profile_count > 1);
             remove(profile_path);
         }
+    }
+}
+
+static void ren_profile_button_clicked(GtkButton *self, CavaPlugin *c) {
+    /* create dialog */
+    gchar *result = show_dialog_with_entry(GTK_WIDGET(self), c, 
+            "Rename Profile", "Profile name:", c->settings.profile);
+
+    /* update profiles */
+    if (result != NULL) {
+        rename_profile(GTK_WIDGET(self), c, result);
+        g_free(result);
     }
 }
 
@@ -727,6 +783,12 @@ void plugin_configure (XfcePanelPlugin *plugin, CavaPlugin *c) {
     populate_profile_combo_box(c);
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     label_and_pack_widget(main, hbox, w->profile, NULL, "Profile:", 0.0, FALSE);
+    w->ren_profile = gtk_button_new();
+    GtkWidget *icon = gtk_image_new_from_icon_name("document-edit", GTK_ICON_SIZE_BUTTON);
+    gtk_button_set_image(GTK_BUTTON(w->ren_profile), icon);
+    gtk_box_pack_start(GTK_BOX(hbox), GTK_WIDGET(w->ren_profile), FALSE, FALSE, 0);
+    g_signal_connect(
+            w->ren_profile, "clicked", G_CALLBACK(ren_profile_button_clicked), c);
     w->del_profile = gtk_button_new_with_label("-");
     gtk_widget_set_sensitive(GTK_WIDGET(w->del_profile), c->profile_count > 1);
     gtk_box_pack_start(GTK_BOX(hbox), GTK_WIDGET(w->del_profile), FALSE, FALSE, 0);

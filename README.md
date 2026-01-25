@@ -31,7 +31,7 @@ From source code repository:
 
 ### Profiles
 
-This plugin uses profiles for fast switching between themes. Profiles are written to `~/.config/cava/profiles/` in the Xfce4 config file format.
+This plugin uses profiles for switching between themes. Profiles are written to `~/.config/cava/profiles/` in the Xfce4 config file format.
 
 ### TODO
 
