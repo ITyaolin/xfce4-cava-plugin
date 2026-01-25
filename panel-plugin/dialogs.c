@@ -779,26 +779,37 @@ void plugin_configure (XfcePanelPlugin *plugin, CavaPlugin *c) {
     gtk_container_set_border_width(GTK_CONTAINER(main), 8);
 
     // Profile
+    GtkWidget *icon;
     w->profile = gtk_combo_box_text_new();
     populate_profile_combo_box(c);
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     label_and_pack_widget(main, hbox, w->profile, NULL, "Profile:", 0.0, FALSE);
+
     w->ren_profile = gtk_button_new();
-    GtkWidget *icon = gtk_image_new_from_icon_name("document-edit", GTK_ICON_SIZE_BUTTON);
+    icon = gtk_image_new_from_icon_name("document-edit", GTK_ICON_SIZE_BUTTON);
     gtk_button_set_image(GTK_BUTTON(w->ren_profile), icon);
     gtk_box_pack_start(GTK_BOX(hbox), GTK_WIDGET(w->ren_profile), FALSE, FALSE, 0);
     g_signal_connect(
             w->ren_profile, "clicked", G_CALLBACK(ren_profile_button_clicked), c);
-    w->del_profile = gtk_button_new_with_label("-");
+    gtk_widget_set_tooltip_text(w->ren_profile, "Rename profile");
+
+    w->del_profile = gtk_button_new();
+    icon = gtk_image_new_from_icon_name("edit-delete", GTK_ICON_SIZE_BUTTON);
+    gtk_button_set_image(GTK_BUTTON(w->del_profile), icon);
     gtk_widget_set_sensitive(GTK_WIDGET(w->del_profile), c->profile_count > 1);
     gtk_box_pack_start(GTK_BOX(hbox), GTK_WIDGET(w->del_profile), FALSE, FALSE, 0);
     g_signal_connect(
             w->del_profile, "clicked", G_CALLBACK(del_profile_button_clicked), c);
-    w->new_profile = gtk_button_new_with_label("+");
+    gtk_widget_set_tooltip_text(w->del_profile, "Delete profile");
+
+    w->new_profile = gtk_button_new();
+    icon = gtk_image_new_from_icon_name("document-new", GTK_ICON_SIZE_BUTTON);
+    gtk_button_set_image(GTK_BUTTON(w->new_profile), icon);
     gtk_box_pack_start(
             GTK_BOX(hbox), GTK_WIDGET(w->new_profile), FALSE, FALSE, 0);
     g_signal_connect(
             w->new_profile, "clicked", G_CALLBACK(new_profile_button_clicked), c);
+    gtk_widget_set_tooltip_text(w->new_profile, "New profile");
 
     // Done
     gtk_box_pack_start(GTK_BOX(main), notebook, FALSE, FALSE, 8);
