@@ -16,16 +16,6 @@
 #define GCC_UNUSED /* nothing */
 #endif
 
-int *bars;
-int *previous_frame;
-float *bars_left, *bars_right;
-double *cava_out;
-float *bars_raw;
-int number_of_bars;
-int raw_number_of_bars;
-int output_channels;
-int timeout_id;
-
 void config_colors(CavaPlugin *c) {
     GdkRGBA fg;
     CavaSettings *s;
@@ -102,15 +92,21 @@ void config_colors(CavaPlugin *c) {
 }
 
 static gboolean draw_cava(GtkWidget *display, cairo_t *cr, CavaPlugin *c) {
+    CavaData *d;
     CavaSettings *s;
     GtkAllocation alloc;
     gint x, y, w, h, rx, ry, r, bar_width, bar_spacing;
 
     // bar size
+    d = &c->data;
     s = &c->settings;
     bar_width = s->bar_width;
     bar_spacing = s->bar_spacing;
     gtk_widget_get_allocation(display, &alloc);
+
+    // data
+    int *bars = d->bars;
+    int number_of_bars = d->number_of_bars;
 
     // foreground color
     cairo_set_source(cr, c->foreground);
@@ -187,7 +183,7 @@ static gboolean draw_cava(GtkWidget *display, cairo_t *cr, CavaPlugin *c) {
     return FALSE;
 }
 
-static float *monstercat_filter(float *_bars, int _number_of_bars, int waves, 
+static float *monstercat_filter(float *bars, int number_of_bars, int waves, 
         double monstercat, int height) {
     int z;
     int m_y, de;
@@ -197,42 +193,45 @@ static float *monstercat_filter(float *_bars, int _number_of_bars, int waves,
         height_normalizer = height / 912.76;
     }
     if (waves > 0) {
-        for (z = 0; z < _number_of_bars; z++) { // waves
-            _bars[z] = _bars[z] / 1.25;
-            // if (_bars[z] < 1) _bars[z] = 1;
+        for (z = 0; z < number_of_bars; z++) { // waves
+            bars[z] = bars[z] / 1.25;
+            // if (bars[z] < 1) bars[z] = 1;
             for (m_y = z - 1; m_y >= 0; m_y--) {
                 de = z - m_y;
-                _bars[m_y] = max(
-                        _bars[z] - height_normalizer * pow(de, 2), _bars[m_y]);
+                bars[m_y] = max(
+                        bars[z] - height_normalizer * pow(de, 2), bars[m_y]);
             }
-            for (m_y = z + 1; m_y < _number_of_bars; m_y++) {
+            for (m_y = z + 1; m_y < number_of_bars; m_y++) {
                 de = m_y - z;
-                _bars[m_y] = max(
-                        _bars[z] - height_normalizer * pow(de, 2), _bars[m_y]);
+                bars[m_y] = max(
+                        bars[z] - height_normalizer * pow(de, 2), bars[m_y]);
             }
         }
     }
     else if (monstercat > 0) {
-        for (z = 0; z < _number_of_bars; z++) {
-            // if (_bars[z] < 1)_bars[z] = 1;
+        for (z = 0; z < number_of_bars; z++) {
+            // if (bars[z] < 1)bars[z] = 1;
             for (m_y = z - 1; m_y >= 0; m_y--) {
                 de = z - m_y;
-                _bars[m_y] = max(
-                        _bars[z] / pow(monstercat * 1.5, de), _bars[m_y]);
+                bars[m_y] = max(
+                        bars[z] / pow(monstercat * 1.5, de), bars[m_y]);
             }
-            for (m_y = z + 1; m_y < _number_of_bars; m_y++) {
+            for (m_y = z + 1; m_y < number_of_bars; m_y++) {
                 de = m_y - z;
-                _bars[m_y] = max(
-                        _bars[z] / pow(monstercat * 1.5, de), _bars[m_y]);
+                bars[m_y] = max(
+                        bars[z] / pow(monstercat * 1.5, de), bars[m_y]);
             }
         }
     }
-    return _bars;
+    return bars;
 }
 
 static gboolean exec_cava(CavaPlugin *c) {
+    CavaData *d = &c->data;
     CavaSettings *s = &c->settings;
     struct audio_data *audio = &c->audio;
+
+    // ignore silence
     static gint sleep_counter = 0;
     gboolean silence = TRUE;
     if (s->sleep_timer > 0) {
@@ -250,6 +249,19 @@ static gboolean exec_cava(CavaPlugin *c) {
             return TRUE;
         }
     }
+
+    // data
+    int *bars = d->bars;
+    int *previous_frame = d->previous_frame;
+    float *bars_left = d->bars_left;
+    float *bars_right = d->bars_right;
+    double *cava_out = d->cava_out;
+    float *bars_raw = d->bars_raw;
+    int number_of_bars = d->number_of_bars;
+    int raw_number_of_bars = d->raw_number_of_bars;
+    int output_channels = d->output_channels;
+
+    // set size
     GtkAllocation alloc;
     gtk_widget_get_allocation(c->display, &alloc);
     int dimension_value = alloc.height;
@@ -258,6 +270,8 @@ static gboolean exec_cava(CavaPlugin *c) {
         dimension_value = alloc.width;
     if (dimension_value < 2)
         return TRUE;
+
+    // execute
     pthread_mutex_lock(&audio->lock);
     double sensitivity = (double)s->sensitivity / 100;
     if (s->waveform) {
@@ -284,6 +298,8 @@ static gboolean exec_cava(CavaPlugin *c) {
         audio->samples_counter = 0;
     }
     pthread_mutex_unlock(&audio->lock);
+
+    // sensitivity
     for (int n = 0; n < raw_number_of_bars; n++) {
         if (!s->waveform) {
             cava_out[n] *= sensitivity;
@@ -305,9 +321,11 @@ static gboolean exec_cava(CavaPlugin *c) {
             bars_raw[n] = cava_out[n];
         }
     }
+
     double eq_ratio = 0;
     double eq_key;
     if (!s->waveform) {
+        // equalizer
         if (s->equalizer && (number_of_bars / output_channels > 0)) {
             eq_ratio = (double)(EQUALIZER_KEY_COUNT / 
                     ((double)(number_of_bars / output_channels)));
@@ -419,21 +437,28 @@ static gboolean exec_cava(CavaPlugin *c) {
         gtk_widget_queue_draw(c->display);
         memcpy(previous_frame, bars, number_of_bars * sizeof(int));
     }
+
+    // update data
+    d->number_of_bars = number_of_bars;
+    d->raw_number_of_bars = raw_number_of_bars;
+    d->output_channels = output_channels;
+
     return TRUE;
 }
 
 void free_cava(CavaPlugin *c) {
     DBG(".");
-    g_source_remove(timeout_id);
+    CavaData *d = &c->data;
+    g_source_remove(d->timeout_id);
     cava_destroy(c->plan);
     cairo_pattern_destroy(c->foreground);
     free(c->plan);
-    free(bars_left);
-    free(bars_right);
-    free(cava_out);
-    free(bars);
-    free(bars_raw);
-    free(previous_frame);
+    free(d->bars_left);
+    free(d->bars_right);
+    free(d->cava_out);
+    free(d->bars);
+    free(d->bars_raw);
+    free(d->previous_frame);
 }
 
 static void init_audio(CavaPlugin *c) {
@@ -510,15 +535,24 @@ static void init_audio(CavaPlugin *c) {
 
 void config_cava(CavaPlugin *c) {
     DBG(".");
+    CavaData *d = &c->data;
     CavaSettings *s = &c->settings;
     struct audio_data *audio = &c->audio;
+
+    // data
+    double *cava_out;
+    int *bars, *previous_frame;
+    float *bars_left, *bars_right, *bars_raw;
+    int number_of_bars, raw_number_of_bars, output_channels, timeout_id;
+
     // force stereo if only one channel is available
     if (s->stereo && audio->channels == 1)
         s->stereo = 0;
     output_channels = 1;
     if (s->stereo && s->bars > 1)
         output_channels = 2;
-    // getting numbers of bars
+
+    // number of bars
     number_of_bars = s->bars;
     if (s->stereo)
         number_of_bars = s->bars / output_channels * output_channels;
@@ -572,6 +606,18 @@ void config_cava(CavaPlugin *c) {
 
     int timeout = 1000 / c->settings.framerate;
     timeout_id = g_timeout_add(timeout, (GSourceFunc)exec_cava, c);
+
+    // set data
+    d->bars = bars;
+    d->previous_frame = previous_frame;
+    d->bars_left = bars_left;
+    d->bars_right = bars_right;
+    d->cava_out = cava_out;
+    d->bars_raw = bars_raw;
+    d->number_of_bars = number_of_bars;
+    d->raw_number_of_bars = raw_number_of_bars;
+    d->output_channels = output_channels;
+    d->timeout_id = timeout_id;
 }
 
 void init_cava(CavaPlugin *c) {

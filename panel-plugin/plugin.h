@@ -67,105 +67,117 @@ enum bar_shape {
 
 typedef struct {
     /* general */
-    gint      framerate;
-    gint      autosens;
-    gint      overshoot;
-    gint      sensitivity;
-    gint      bars;
-    gint      bar_width;
-    gint      bar_spacing;
-    gint      bar_shape;
-    gint      max_height;
-    gint      lower_cutoff_freq;
-    gint      higher_cutoff_freq;
-    gint      sleep_timer;
+    gint    framerate;
+    gint    autosens;
+    gint    overshoot;
+    gint    sensitivity;
+    gint    bars;
+    gint    bar_width;
+    gint    bar_spacing;
+    gint    bar_shape;
+    gint    max_height;
+    gint    lower_cutoff_freq;
+    gint    higher_cutoff_freq;
+    gint    sleep_timer;
     /* input */
-    gint      method;
-    gchar     *source;
-    gint      sample_rate;
-    gint      sample_bits;
-    gint      channels;
-    gint      autoconnect;
-    gint      active;
-    gint      remix;
-    gint      virtual;
+    gint    method;
+    gchar   *source;
+    gint    sample_rate;
+    gint    sample_bits;
+    gint    channels;
+    gint    autoconnect;
+    gint    active;
+    gint    remix;
+    gint    virtual;
     /* output */
-    gint      orientation;
-    gint      stereo;
-    gint      mono_option;
-    gint      reverse;
-    gint      show_idle_bar_heads;
-    gint      waveform;
+    gint    orientation;
+    gint    stereo;
+    gint    mono_option;
+    gint    reverse;
+    gint    show_idle_bar_heads;
+    gint    waveform;
     /* color */
-    gchar     *background;
-    gchar     *foreground;
-    gint      gradient;
-    gchar     **gradient_colors;
-    gint      horizontal_gradient;
-    gchar     **horizontal_gradient_colors;
-    gint      blend_direction;
-    gchar     *theme;
+    gchar   *background;
+    gchar   *foreground;
+    gint    gradient;
+    gchar   **gradient_colors;
+    gint    horizontal_gradient;
+    gchar   **horizontal_gradient_colors;
+    gint    blend_direction;
+    gchar   *theme;
     /* smoothing */
-    gint      monstercat;
-    gint      waves;
-    gint      noise_reduction;
-    gint      equalizer;
-    gdouble   equalizer_keys[EQUALIZER_KEY_COUNT];
-    gint      border;
-    gchar     *border_color;
-    gint      margin;
-    gint      padding;
-    gchar     *profile; // profile filename
+    gint    monstercat;
+    gint    waves;
+    gint    noise_reduction;
+    gint    equalizer;
+    gdouble equalizer_keys[EQUALIZER_KEY_COUNT];
+    gint    border;
+    gchar   *border_color;
+    gint    margin;
+    gint    padding;
+    gchar   *profile; // profile filename
 } CavaSettings;
 
 typedef struct {
     /* profile */
-    GtkWidget  *profile;
-    GtkWidget  *new_profile;
-    GtkWidget  *del_profile;
-    GtkWidget  *ren_profile;
+    GtkWidget *profile;
+    GtkWidget *new_profile;
+    GtkWidget *del_profile;
+    GtkWidget *ren_profile;
     /* general */
-    GtkWidget  *framerate;
-    GtkWidget  *sensitivity;
-    GtkWidget  *bars;
-    GtkWidget  *bar_width;
-    GtkWidget  *bar_spacing;
-    GtkWidget  *bar_shape;
-    GtkWidget  *lower_cutoff_freq;
-    GtkWidget  *higher_cutoff_freq;
-    GtkWidget  *sleep_timer;
+    GtkWidget *framerate;
+    GtkWidget *sensitivity;
+    GtkWidget *bars;
+    GtkWidget *bar_width;
+    GtkWidget *bar_spacing;
+    GtkWidget *bar_shape;
+    GtkWidget *lower_cutoff_freq;
+    GtkWidget *higher_cutoff_freq;
+    GtkWidget *sleep_timer;
     /* input */
     /* output */
-    GtkWidget  *orientation;
-    GtkWidget  *stereo;
+    GtkWidget *orientation;
+    GtkWidget *stereo;
     /* color */
-    GtkWidget  *background;
-    GtkWidget  *foreground;
-    GtkWidget  *gradient;
-    GtkWidget  *gradient_colors[GRADIENT_COLOR_COUNT];
-    GtkWidget  *horizontal_gradient;
-    GtkWidget  *horizontal_gradient_colors[GRADIENT_COLOR_COUNT];
+    GtkWidget *background;
+    GtkWidget *foreground;
+    GtkWidget *gradient;
+    GtkWidget *gradient_colors[GRADIENT_COLOR_COUNT];
+    GtkWidget *horizontal_gradient;
+    GtkWidget *horizontal_gradient_colors[GRADIENT_COLOR_COUNT];
     /* smoothing */
-    GtkWidget  *monstercat;
-    GtkWidget  *waves;
-    GtkWidget  *noise_reduction;
-    GtkWidget  *equalizer;
-    GtkWidget  *equalizer_keys[EQUALIZER_KEY_COUNT];
-    GtkWidget  *border;
-    GtkWidget  *border_color;
-    GtkWidget  *margin;
-    GtkWidget  *padding;
+    GtkWidget *monstercat;
+    GtkWidget *waves;
+    GtkWidget *noise_reduction;
+    GtkWidget *equalizer;
+    GtkWidget *equalizer_keys[EQUALIZER_KEY_COUNT];
+    GtkWidget *border;
+    GtkWidget *border_color;
+    GtkWidget *margin;
+    GtkWidget *padding;
 } SettingWidgets;
 
+typedef struct {
+    int     *bars;
+    int     *previous_frame;
+    float   *bars_left;
+    float   *bars_right;
+    double  *cava_out;
+    float   *bars_raw;
+    int     number_of_bars;
+    int     raw_number_of_bars;
+    int     output_channels;
+    int     timeout_id;
+} CavaData;
+
 /* plugin structure */
-typedef struct
-{
+typedef struct {
     XfcePanelPlugin *plugin;
 
     /* panel widgets */
-    GtkWidget       *ebox;
-    GtkWidget       *hvbox;
-    GtkWidget       *display;
+    GtkWidget   *ebox;
+    GtkWidget   *hvbox;
+    GtkWidget   *display;
 
     /* plugin settings */
     GtkWidget       *settings_dialog;
@@ -174,19 +186,19 @@ typedef struct
     GtkCssProvider  *css;
 
     /* cava */
-    struct cava_plan *plan;
-    struct audio_data audio;
-    cairo_pattern_t *foreground;
+    CavaData            data;
+    struct cava_plan    *plan;
+    struct audio_data   audio;
+    cairo_pattern_t     *foreground;
 
     // offsets for centering rotated bars
     gint x_offset;
     gint y_offset;
 
     /* cava data */
-    gboolean initialized;
-    gint profile_count;
-}
-CavaPlugin;
+    gboolean    initialized;
+    gint        profile_count;
+} CavaPlugin;
 
 void init_cava(CavaPlugin *cava);
 void config_cava(CavaPlugin *cava);

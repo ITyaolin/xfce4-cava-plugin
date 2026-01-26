@@ -266,16 +266,9 @@ static void reset_equalizer_button(GtkButton *self, CavaPlugin *c) {
                 c->settings.equalizer_keys[i]);
     }
 }
-/*
-static void text_buffer_changed(GtkTextBuffer *self, SettingChanged *sc) {
-    GtkTextIter start, end;
-    gtk_text_buffer_get_start_iter(self, &start);
-    gtk_text_buffer_get_end_iter(self, &end);
-    *(gchar **)sc->setting = gtk_text_buffer_get_text(self, &start, &end, FALSE);
-    setting_changed(sc);
-}
-*/
+
 static void profile_combo_box_changed(GtkComboBoxText *self, CavaPlugin *c) {
+    profile_save(c);
     c->settings.profile = gtk_combo_box_text_get_active_text(self);
     profile_read(c);
     load_settings(c);
@@ -535,23 +528,7 @@ static void create_reset_button(CavaPlugin *c, GtkWidget *row, gchar *text,
     gtk_box_pack_start(GTK_BOX(row), GTK_WIDGET(button), FALSE, FALSE, 0);
     g_signal_connect(button, "clicked", G_CALLBACK(cb), c);
 }
-/*
-   static void create_text_view(CavaPlugin *c, GtkWidget *container, 
-   gint update_event, gchar **setting, gint height) {
-   GtkWidget *widget = gtk_text_view_new();
-   GtkWidget *window = gtk_scrolled_window_new(NULL, NULL);
-   gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(window), GTK_SHADOW_IN);
-   gtk_widget_set_size_request(window, -1, height);
-   gtk_text_view_set_monospace(GTK_TEXT_VIEW(widget), TRUE);
-   GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(widget));
-   gtk_text_buffer_set_text(buffer, *setting, -1);
-   gtk_container_add(GTK_CONTAINER(window), widget);
-   gtk_box_pack_start(GTK_BOX(container), window, TRUE, TRUE, 8);
-   gtk_container_set_border_width(GTK_CONTAINER(widget), 18);
-   gtk_container_set_border_width(GTK_CONTAINER(window), 8);
-   SETTING_CHANGED_INIT(buffer, "changed", text_buffer_changed);
-   }
-   */
+
 static void populate_profile_combo_box(CavaPlugin *c) {
     GDir *dir;
     GError *error;
