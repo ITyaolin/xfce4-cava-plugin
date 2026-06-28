@@ -98,6 +98,7 @@ static void load_settings(CavaPlugin *c) {
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->bar_width), s->bar_width);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->bar_spacing), s->bar_spacing);
     gtk_combo_box_set_active(GTK_COMBO_BOX(w->bar_shape), s->bar_shape);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(w->bar_caps), s->bar_caps);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->lower_cutoff_freq), 
             s->lower_cutoff_freq);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->higher_cutoff_freq), 
@@ -112,14 +113,12 @@ static void load_settings(CavaPlugin *c) {
 
     /* color */
     set_color_button(w->background, s->background);
-    set_color_button(w->foreground, s->foreground);
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(w->gradient), s->gradient);
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(w->horizontal_gradient), 
-            s->horizontal_gradient);
+    set_color_button(w->foreground1, s->foreground1);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(w->foreground), s->foreground);
     for (int i = 0; i < GRADIENT_COLOR_COUNT; i++) {
-        set_color_button(w->gradient_colors[i], s->gradient_colors[i]);
-        set_color_button(w->horizontal_gradient_colors[i], 
-                s->horizontal_gradient_colors[i]);
+        set_color_button(w->vgradient_colors[i], s->vgradient_colors[i]);
+        set_color_button(w->hgradient_colors[i], 
+                s->hgradient_colors[i]);
     }
 
     /* smoothing */
@@ -143,6 +142,19 @@ static void load_settings(CavaPlugin *c) {
     config_cava(c);
 }
 
+static void update_foreground(CavaPlugin *c) {
+    CavaSettings *s = &c->settings;
+    SettingWidgets *w = &c->widgets;
+    gtk_widget_set_visible(gtk_widget_get_parent(w->foreground2), 
+            s->foreground == FG_STYLE_TWO_COLORS);
+    gtk_widget_set_visible(w->box_scolors,
+            s->foreground <= FG_STYLE_TWO_COLORS);
+    gtk_widget_set_visible(w->box_vgrad,
+            s->foreground == FG_STYLE_VGRADIENT);
+    gtk_widget_set_visible(w->box_hgrad,
+            s->foreground == FG_STYLE_HGRADIENT);
+}
+
 static void setting_changed(SettingChanged *sc) {
     gint u = sc->update_event;
     if (u == UPDATE_NONE)
@@ -151,8 +163,10 @@ static void setting_changed(SettingChanged *sc) {
         resize_display(sc->cava);
     if (u & UPDATE_STYLES)
         restyle_display(sc->cava);
-    if (u & UPDATE_COLORS)
+    if (u & UPDATE_COLORS) {
+        update_foreground(sc->cava);
         config_colors(sc->cava);
+    }
     if (u & UPDATE_CONFIG) {
         free_cava(sc->cava);
         config_cava(sc->cava); // includes colors update
@@ -219,7 +233,7 @@ static void spin_button_changed(GtkSpinButton *self, SettingChanged *sc) {
             setting_changed(sc);
         }
         else {
-           gtk_spin_button_set_value(self, *(gint *)sc->setting); 
+            gtk_spin_button_set_value(self, *(gint *)sc->setting); 
         }
     }
 }
@@ -249,6 +263,39 @@ static void color_button_changed(GtkColorButton *self, SettingChanged *sc) {
         *(gchar **)sc->setting = rgba_to_html(&new_color);
         setting_changed(sc);
     }
+}
+
+static void mirror_vgradient_colors(GtkWidget **buttons, gchar **colors) {
+    GtkWidget *button1, *button2;
+    gchar *foreground1, *foreground2;
+    GdkRGBA rgba1, rgba2;
+    int index2;
+    for (int i = 0; i < GRADIENT_COLOR_COUNT / 2; i++) {
+        index2 = GRADIENT_COLOR_COUNT - (i + 1);
+        foreground1 = colors[i];
+        foreground2 = colors[index2];
+        button1 = buttons[i];
+        button2 = buttons[index2];
+        colors[i] = foreground2;
+        colors[index2] = foreground1;
+        gdk_rgba_parse(&rgba1, foreground1);
+        gdk_rgba_parse(&rgba2, foreground2);
+        gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(button1), &rgba2);
+        gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(button2), &rgba1);
+    }
+}
+
+static void mirror_vgradient_button_clicked(GtkButton *self, CavaPlugin *c) {
+    mirror_vgradient_colors(
+            c->widgets.vgradient_colors, c->settings.vgradient_colors);
+    config_colors(c);
+}
+
+static void mirror_hgradient_button_clicked(
+        GtkButton *self, CavaPlugin *c) {
+    mirror_vgradient_colors(c->widgets.hgradient_colors, 
+            c->settings.hgradient_colors);
+    config_colors(c);
 }
 
 static void scale_value_changed(GtkScale *self, SettingChanged *sc) {
@@ -564,7 +611,7 @@ static void populate_profile_combo_box(CavaPlugin *c) {
         counter++;
     }
     c->profile_count = counter;
-     
+
     /* update widgets */
     gtk_combo_box_set_active(GTK_COMBO_BOX(widget), profile_index);
     g_signal_connect(widget, "changed", G_CALLBACK(profile_combo_box_changed), c);
@@ -575,7 +622,7 @@ static double logspace(double start, double stop, int n, int N) {
     return start * pow(stop / start, n / (double)(N - 1));
 }
 
-void plugin_configure (XfcePanelPlugin *plugin, CavaPlugin *c) {
+void plugin_configure(XfcePanelPlugin *plugin, CavaPlugin *c) {
     GtkWidget *dialog;
 
     CavaSettings *s = &c->settings;
@@ -604,21 +651,28 @@ void plugin_configure (XfcePanelPlugin *plugin, CavaPlugin *c) {
             G_CALLBACK(plugin_configure_response), c);
 
     // Bars
-    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-    gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+    GtkWidget *vbox_bars = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_container_set_border_width(GTK_CONTAINER(vbox_bars), 8);
     GtkSizeGroup *sg = gtk_size_group_new(GTK_SIZE_GROUP_HORIZONTAL);
-    w->bars = create_spin_button(
-            c, vbox, sg, UPDATE_ALL, "Bars:", &s->bars, 1, 512);
-    w->bar_width = create_spin_button(
-            c, vbox, sg, UPDATE_SIZE, "Bar Width:", &s->bar_width, 1, 100);
-    w->bar_spacing = create_spin_button(
-            c, vbox, sg, UPDATE_SIZE, "Bar Spacing:", &s->bar_spacing, 0, 10);
+    w->bars = create_spin_button(c, vbox_bars, sg, UPDATE_ALL, 
+            "Number:", &s->bars, 1, 512);
+    w->bar_width = create_spin_button(c, vbox_bars, sg, UPDATE_SIZE, 
+            "Width:", &s->bar_width, 1, 100);
+    w->bar_spacing = create_spin_button(c, vbox_bars, sg, UPDATE_SIZE, 
+            "Spacing:", &s->bar_spacing, 0, 10);
+
+    // Bar Shape
     const gchar *bar_shape_items[] = {
         "rectangle",
         "oblong",
     };
-    w->bar_shape = create_combo_box(c, vbox, sg, UPDATE_NONE, "Bar Shape:", 
+    GtkWidget *container;
+    w->bar_shape = create_combo_box(
+            c, vbox_bars, sg, UPDATE_NONE, "Shape:", 
             bar_shape_items, ARRAY_SIZE(bar_shape_items), &s->bar_shape);
+    container = gtk_widget_get_parent(w->bar_shape);
+    w->bar_caps = create_check_button(
+            c, container, sg, UPDATE_COLORS, "Caps", &s->bar_caps);
 
     // Orientation
     const gchar *orientation_items[] = {
@@ -629,77 +683,109 @@ void plugin_configure (XfcePanelPlugin *plugin, CavaPlugin *c) {
         "horizontal",
         "vertical",
     };
-    w->orientation = create_combo_box(c, vbox, sg, 
+    w->orientation = create_combo_box(c, vbox_bars, sg, 
             UPDATE_SIZE | UPDATE_COLORS, "Orientation:", 
             orientation_items, ARRAY_SIZE(orientation_items), &s->orientation);
-    gtk_box_pack_start(GTK_BOX(vbox), 
+    gtk_box_pack_start(GTK_BOX(vbox_bars), 
             gtk_separator_new(GTK_ORIENTATION_VERTICAL), FALSE, FALSE, 4);
 
     // CSS
-    GtkWidget *container;
     w->border = create_spin_button(
-            c, vbox, sg, UPDATE_STYLES | UPDATE_SIZE, 
+            c, vbox_bars, sg, UPDATE_STYLES | UPDATE_SIZE, 
             "Border:", &s->border, 0, 10);
     container = gtk_widget_get_parent(w->border);
     w->border_color = create_color_button(
             c, container, NULL, UPDATE_STYLES, NULL, &s->border_color);
-    w->margin = create_spin_button(
-            c, vbox, sg, UPDATE_STYLES | UPDATE_SIZE, "Margin:", &s->margin, 0, 100);
-    w->padding = create_spin_button(
-            c, vbox, sg, UPDATE_STYLES | UPDATE_SIZE, "Padding:", &s->padding, 0, 100);
-    gtk_box_pack_start(GTK_BOX(vbox), 
+    w->margin = create_spin_button(c, vbox_bars, sg, 
+            UPDATE_STYLES | UPDATE_SIZE, "Margin:", &s->margin, 0, 100);
+    w->padding = create_spin_button(c, vbox_bars, sg, 
+            UPDATE_STYLES | UPDATE_SIZE, "Padding:", &s->padding, 0, 100);
+    gtk_box_pack_start(GTK_BOX(vbox_bars), 
             gtk_separator_new(GTK_ORIENTATION_VERTICAL), FALSE, FALSE, 4);
-    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    w->background = create_color_button(
-            c, hbox, sg, UPDATE_STYLES, "Background:", &s->background);
-    w->foreground = create_color_button(
-            c, hbox, NULL, UPDATE_COLORS, "Foreground:", &s->foreground);
-    gtk_widget_set_hexpand(w->foreground, TRUE);
-    gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
 
     // Colors
     sg = gtk_size_group_new(GTK_SIZE_GROUP_HORIZONTAL);
-    GtkWidget *vbox2 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-    gtk_container_set_border_width(GTK_CONTAINER(vbox2), 8);
-    hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    GtkWidget *vbox2a = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    GtkWidget *vbox_colors = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_container_set_border_width(GTK_CONTAINER(vbox_colors), 8);
+    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    const gchar *foreground_items[] = {
+        "one color",
+        "two colors",
+        "vertical gradient",
+        "horizontal gradient",
+    };
+    w->cap_color = create_color_button(
+            c, vbox_colors, sg, UPDATE_COLORS, "Caps:", &s->cap_color);
+    w->background = create_color_button(
+            c, vbox_colors, sg, UPDATE_STYLES, "Background:", &s->background);
+    w->foreground = create_combo_box(c, vbox_colors, sg, UPDATE_COLORS, "Foreground:", 
+            foreground_items, ARRAY_SIZE(foreground_items), &s->foreground);
+    gtk_box_pack_start(GTK_BOX(vbox_colors), 
+            gtk_separator_new(GTK_ORIENTATION_VERTICAL), FALSE, FALSE, 4);
+
+    // Color 1 and 2
+    GtkWidget *vbox_scolors = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    w->box_scolors = vbox_scolors;
+    w->foreground1 = create_color_button(
+            c, vbox_scolors, sg, UPDATE_COLORS, "Color 1:", &s->foreground1);
+    w->foreground2 = create_color_button(
+            c, vbox_scolors, sg, UPDATE_COLORS, "Color 2:", &s->foreground2);
 
     // Gradient Colors
-    w->gradient = create_check_button(
-            c, vbox2a, sg, UPDATE_COLORS, "Gradient", &s->gradient);
+    GtkWidget *hbox_vgrad = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    GtkWidget *vbox_vgrad1 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    GtkWidget *vbox_vgrad2 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    w->box_vgrad = hbox_vgrad;
     gchar *text;
     for (int i = 0; i < GRADIENT_COLOR_COUNT; i++) {
         text = g_strdup_printf("Color %d:", i + 1);
-        w->gradient_colors[i] = create_color_button(c, vbox2a, sg, 
-                UPDATE_COLORS, text, &s->gradient_colors[i]);
+        w->vgradient_colors[i] = create_color_button(c, 
+                i < 4 ? vbox_vgrad1 : vbox_vgrad2, sg, 
+                UPDATE_COLORS, text, &s->vgradient_colors[i]);
         g_free(text);
     }
+    w->mirror_vgradient = gtk_button_new_with_label("Mirror colors");
+    gtk_box_pack_start(GTK_BOX(vbox_vgrad1), 
+            GTK_WIDGET(w->mirror_vgradient), FALSE, FALSE, 0);
+    g_signal_connect(w->mirror_vgradient, "clicked", 
+            G_CALLBACK(mirror_vgradient_button_clicked), c);
+    gtk_box_pack_start(GTK_BOX(hbox_vgrad), GTK_WIDGET(vbox_vgrad1), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox_vgrad), GTK_WIDGET(vbox_vgrad2), FALSE, FALSE, 0);
 
     // Horizontal Gradient Colors
-    GtkWidget *vbox2b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-    w->horizontal_gradient = create_check_button(c, vbox2b, sg, UPDATE_COLORS, 
-            "Horizontal Gradient", &s->horizontal_gradient);
+    GtkWidget *hbox_hgrad = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    GtkWidget *vbox_hgrad1 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    GtkWidget *vbox_hgrad2 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    w->box_hgrad = hbox_hgrad;
     for (int i = 0; i < GRADIENT_COLOR_COUNT; i++) {
         text = g_strdup_printf("Color %d:", i + 1);
-        w->horizontal_gradient_colors[i] = create_color_button(c, vbox2b, sg, 
-                UPDATE_COLORS, text, &s->horizontal_gradient_colors[i]);
+        w->hgradient_colors[i] = create_color_button(c, 
+                i < 4 ? vbox_hgrad1 : vbox_hgrad2, sg, 
+                UPDATE_COLORS, text, &s->hgradient_colors[i]);
         g_free(text);
     }
-    gtk_box_pack_start(GTK_BOX(hbox), GTK_WIDGET(vbox2a), FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(hbox), 
-            gtk_separator_new(GTK_ORIENTATION_VERTICAL), FALSE, FALSE, 4);
-    gtk_box_pack_start(GTK_BOX(hbox), GTK_WIDGET(vbox2b), FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(vbox2), GTK_WIDGET(hbox), FALSE, FALSE, 0);
+    w->mirror_hgradient = gtk_button_new_with_label("Mirror colors");
+    gtk_box_pack_start(GTK_BOX(vbox_hgrad1), 
+            GTK_WIDGET(w->mirror_hgradient), FALSE, FALSE, 0);
+    g_signal_connect(w->mirror_hgradient, "clicked", 
+            G_CALLBACK(mirror_hgradient_button_clicked), c);
+    gtk_box_pack_start(GTK_BOX(hbox_hgrad), GTK_WIDGET(vbox_hgrad1), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox_hgrad), GTK_WIDGET(vbox_hgrad2), FALSE, FALSE, 0);
+
+    gtk_box_pack_start(GTK_BOX(hbox), GTK_WIDGET(vbox_scolors), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox), GTK_WIDGET(hbox_vgrad), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox), GTK_WIDGET(hbox_hgrad), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox_colors), GTK_WIDGET(hbox), FALSE, FALSE, 0);
 
     // Equalizer
     sg = gtk_size_group_new(GTK_SIZE_GROUP_HORIZONTAL);
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    GtkWidget *vbox3 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-    gtk_container_set_border_width(GTK_CONTAINER(vbox3), 8);
+    GtkWidget *vbox_eq = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_container_set_border_width(GTK_CONTAINER(vbox_eq), 8);
     w->equalizer = create_check_button(
             c, hbox, NULL, UPDATE_NONE, "Enable", &s->equalizer);
     create_reset_button(c, hbox, "Reset", reset_equalizer_button);
-    gtk_box_pack_start(GTK_BOX(vbox3), GTK_WIDGET(hbox), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox_eq), GTK_WIDGET(hbox), FALSE, FALSE, 0);
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     gdouble freq;
     for (int i = 0; i < EQUALIZER_KEY_COUNT; i++) {
@@ -710,45 +796,45 @@ void plugin_configure (XfcePanelPlugin *plugin, CavaPlugin *c) {
                 &s->equalizer_keys[i], 0.0, EQUALIZER_MAX, 0.1);
         g_free(text);
     }
-    gtk_box_pack_start(GTK_BOX(vbox3), GTK_WIDGET(hbox), TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox_eq), GTK_WIDGET(hbox), TRUE, TRUE, 0);
 
     // Advanced
-    GtkWidget *vbox4 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-    gtk_container_set_border_width(GTK_CONTAINER(vbox4), 8);
+    GtkWidget *vbox_adv = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_container_set_border_width(GTK_CONTAINER(vbox_adv), 8);
     w->framerate = create_spin_button(
-            c, vbox4, sg, UPDATE_CONFIG, "Frame Rate:", &s->framerate, 1, 1000);
+            c, vbox_adv, sg, UPDATE_CONFIG, "Frame Rate:", &s->framerate, 1, 1000);
     w->sleep_timer = create_spin_button(
-            c, vbox4, sg, UPDATE_NONE, "Sleep Timer (s):", &s->sleep_timer, 0, 1000);
+            c, vbox_adv, sg, UPDATE_NONE, "Sleep Timer (s):", &s->sleep_timer, 0, 1000);
     w->sensitivity = create_spin_button(
-            c, vbox4, sg, UPDATE_NONE, "Sensitivity (%):", &s->sensitivity, 1, 1000);
+            c, vbox_adv, sg, UPDATE_NONE, "Sensitivity (%):", &s->sensitivity, 1, 1000);
     w->lower_cutoff_freq = create_spin_button(
-            c, vbox4, sg, UPDATE_CONFIG, "Low frequency (Hz):", &s->lower_cutoff_freq, 0, 22000);
+            c, vbox_adv, sg, UPDATE_CONFIG, "Low frequency (Hz):", &s->lower_cutoff_freq, 0, 22000);
     w->higher_cutoff_freq = create_spin_button(
-            c, vbox4, sg, UPDATE_CONFIG, "High frequency (Hz):", &s->higher_cutoff_freq, 0, 22000);
-    gtk_box_pack_start(GTK_BOX(vbox4), 
+            c, vbox_adv, sg, UPDATE_CONFIG, "High frequency (Hz):", &s->higher_cutoff_freq, 0, 22000);
+    gtk_box_pack_start(GTK_BOX(vbox_adv), 
             gtk_separator_new(GTK_ORIENTATION_VERTICAL), FALSE, FALSE, 4);
     w->stereo = create_check_button(
-            c, vbox4, sg, UPDATE_ALL, "Stereo", &s->stereo);
+            c, vbox_adv, sg, UPDATE_ALL, "Stereo", &s->stereo);
     w->monstercat = create_spin_button(
-            c, vbox4, sg, UPDATE_NONE, "Smoothing (%):", &s->monstercat, 0, 100);
+            c, vbox_adv, sg, UPDATE_NONE, "Smoothing (%):", &s->monstercat, 0, 100);
     w->waves = create_check_button(
-            c, vbox4, sg, UPDATE_NONE, "Waves", &s->waves);
+            c, vbox_adv, sg, UPDATE_NONE, "Waves", &s->waves);
     w->noise_reduction = create_spin_button(
-            c, vbox4, sg, UPDATE_ALL, "Noise Reduction (%):", &s->noise_reduction, 0, 100);
+            c, vbox_adv, sg, UPDATE_ALL, "Noise Reduction (%):", &s->noise_reduction, 0, 100);
 
     // Tab Pages
     GtkWidget* notebook = gtk_notebook_new();
 
     gtk_container_set_border_width(GTK_CONTAINER(notebook), 6);
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), 
-            GTK_WIDGET(vbox), gtk_label_new("Bars"));
+            GTK_WIDGET(vbox_bars), gtk_label_new("Bars"));
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), 
-            GTK_WIDGET(vbox2), gtk_label_new("Gradients"));
+            GTK_WIDGET(vbox_colors), gtk_label_new("Colors"));
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), 
-            GTK_WIDGET(vbox3), gtk_label_new("Equalizer"));
+            GTK_WIDGET(vbox_eq), gtk_label_new("Equalizer"));
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), 
-            GTK_WIDGET(vbox4), gtk_label_new("Advanced"));
-    gtk_widget_set_vexpand(vbox3, TRUE);
+            GTK_WIDGET(vbox_adv), gtk_label_new("Advanced"));
+    gtk_widget_set_vexpand(vbox_eq, TRUE);
 
     GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
 
@@ -792,7 +878,17 @@ void plugin_configure (XfcePanelPlugin *plugin, CavaPlugin *c) {
     gtk_box_pack_start(GTK_BOX(main), notebook, FALSE, FALSE, 8);
     gtk_container_add(GTK_CONTAINER(content), main);
 
+    // Set visibility
     gtk_widget_show_all(main);
+    gtk_widget_set_visible(
+            gtk_widget_get_parent(w->foreground2), 
+            s->foreground == FG_STYLE_TWO_COLORS);
+    gtk_widget_set_visible(w->box_scolors, 
+            s->foreground <= FG_STYLE_TWO_COLORS);
+    gtk_widget_set_visible(w->box_vgrad, 
+            s->foreground == FG_STYLE_VGRADIENT);
+    gtk_widget_set_visible(w->box_hgrad, 
+            s->foreground == FG_STYLE_HGRADIENT);
 
     /* show the entire dialog */
     gtk_widget_show (dialog);

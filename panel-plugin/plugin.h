@@ -50,6 +50,16 @@ enum orientation {
     ORIENT_SPLIT_V,
 };
 
+enum foreground {
+    FG_STYLE_ONE_COLOR = 0,
+    FG_STYLE_TWO_COLORS = 1,
+    FG_STYLE_VGRADIENT = 2,
+    FG_STYLE_HGRADIENT = 3,
+};
+
+#define ORIENT_SPLIT(o) \
+    (((o) == ORIENT_SPLIT_H) || ((o) == ORIENT_SPLIT_V))
+
 #define ORIENT_VERTICAL(o) \
     (((o) == ORIENT_BOTTOM) || ((o) == ORIENT_TOP) || ((o) == ORIENT_SPLIT_H))
 
@@ -75,6 +85,7 @@ typedef struct {
     gint    bar_width;
     gint    bar_spacing;
     gint    bar_shape;
+    gint    bar_caps;
     gint    max_height;
     gint    lower_cutoff_freq;
     gint    higher_cutoff_freq;
@@ -98,11 +109,12 @@ typedef struct {
     gint    waveform;
     /* color */
     gchar   *background;
-    gchar   *foreground;
-    gint    gradient;
-    gchar   **gradient_colors;
-    gint    horizontal_gradient;
-    gchar   **horizontal_gradient_colors;
+    gint    foreground;
+    gchar   *foreground1;
+    gchar   *foreground2;
+    gchar   *cap_color;
+    gchar   **vgradient_colors;
+    gchar   **hgradient_colors;
     gint    blend_direction;
     gchar   *theme;
     /* smoothing */
@@ -131,6 +143,7 @@ typedef struct {
     GtkWidget *bar_width;
     GtkWidget *bar_spacing;
     GtkWidget *bar_shape;
+    GtkWidget *bar_caps;
     GtkWidget *lower_cutoff_freq;
     GtkWidget *higher_cutoff_freq;
     GtkWidget *sleep_timer;
@@ -140,11 +153,17 @@ typedef struct {
     GtkWidget *stereo;
     /* color */
     GtkWidget *background;
+    GtkWidget *foreground1;
+    GtkWidget *foreground2;
     GtkWidget *foreground;
-    GtkWidget *gradient;
-    GtkWidget *gradient_colors[GRADIENT_COLOR_COUNT];
-    GtkWidget *horizontal_gradient;
-    GtkWidget *horizontal_gradient_colors[GRADIENT_COLOR_COUNT];
+    GtkWidget *cap_color;
+    GtkWidget *vgradient_colors[GRADIENT_COLOR_COUNT];
+    GtkWidget *hgradient_colors[GRADIENT_COLOR_COUNT];
+    GtkWidget *mirror_vgradient;
+    GtkWidget *mirror_hgradient;
+    GtkWidget *box_scolors;
+    GtkWidget *box_vgrad;
+    GtkWidget *box_hgrad;
     /* smoothing */
     GtkWidget *monstercat;
     GtkWidget *waves;
@@ -159,6 +178,7 @@ typedef struct {
 
 typedef struct {
     int     *bars;
+    double     *caps;
     int     *previous_frame;
     float   *bars_left;
     float   *bars_right;
@@ -167,7 +187,6 @@ typedef struct {
     int     number_of_bars;
     int     raw_number_of_bars;
     int     output_channels;
-    int     timeout_id;
 } CavaData;
 
 /* plugin structure */
@@ -180,6 +199,7 @@ typedef struct {
     GtkWidget   *display;
 
     /* plugin settings */
+    gboolean        enabled;
     GtkWidget       *settings_dialog;
     CavaSettings    settings;
     SettingWidgets  widgets;
@@ -190,6 +210,7 @@ typedef struct {
     struct cava_plan    *plan;
     struct audio_data   audio;
     cairo_pattern_t     *foreground;
+    cairo_pattern_t     *cap_color;
 
     // offsets for centering rotated bars
     gint x_offset;
@@ -197,10 +218,20 @@ typedef struct {
 
     /* cava data */
     gboolean    initialized;
+    gint        timeout_id;
     gint        profile_count;
 } CavaPlugin;
 
+typedef struct {
+    int x;
+    int y;
+    int w;
+    int h;
+} Rectangle;
+
 void init_cava(CavaPlugin *cava);
+void start_cava(CavaPlugin *cava);
+void stop_cava(CavaPlugin *cava);
 void config_cava(CavaPlugin *cava);
 void free_cava(CavaPlugin *cava);
 void resize_display(CavaPlugin *cava);

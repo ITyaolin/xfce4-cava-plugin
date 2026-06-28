@@ -39,6 +39,7 @@ const gint default_bars = 32;
 const gint default_bar_width = 2;
 const gint default_bar_spacing = 1;
 const gint default_bar_shape = BAR_SHAPE_RECTANGLE;
+const gint default_bar_caps = 0;
 const gint default_max_height = 100;
 const gint default_lower_cutoff_freq = 60;
 const gint default_higher_cutoff_freq = 16000;
@@ -59,9 +60,11 @@ const gint default_reverse = 0;
 const gint default_show_idle_bar_heads = 0;
 const gint default_waveform = 0;
 gchar *default_background = "#00000000";
-gchar *default_foreground = "#3fffff";
-const gint default_gradient = 0;
-gchar *default_gradient_colors[] = {
+gchar *default_cap_color = "#00ffff";
+gchar *default_foreground1 = "#3fffff";
+gchar *default_foreground2 = "#1f8f8f";
+const gint default_foreground = FG_STYLE_ONE_COLOR;
+gchar *default_vgradient_colors[] = {
     "#59cc33",
     "#80cc33",
     "#a6cc33",
@@ -72,8 +75,7 @@ gchar *default_gradient_colors[] = {
     "#cc3333",
     NULL
 };
-const gint default_horizontal_gradient = 0;
-gchar *default_horizontal_gradient_colors[] = {
+gchar *default_hgradient_colors[] = {
     "#c45161",
     "#e094a0",
     "#f2b6c0",
@@ -192,6 +194,7 @@ void profile_save(CavaPlugin *c) {
         xfce_rc_write_int_entry(rc, "bar_width", s->bar_width);
         xfce_rc_write_int_entry(rc, "bar_spacing", s->bar_spacing);
         xfce_rc_write_int_entry(rc, "bar_shape", s->bar_shape);
+        xfce_rc_write_int_entry(rc, "bar_caps", s->bar_caps);
         xfce_rc_write_int_entry(rc, "max_height", s->max_height);
         xfce_rc_write_int_entry(rc, "lower_cutoff_freq", s->lower_cutoff_freq);
         xfce_rc_write_int_entry(rc, "higher_cutoff_freq", s->higher_cutoff_freq);
@@ -212,18 +215,19 @@ void profile_save(CavaPlugin *c) {
         xfce_rc_write_int_entry(rc, "show_idle_bar_heads", s->show_idle_bar_heads);
         xfce_rc_write_int_entry(rc, "waveform", s->waveform);
         xfce_rc_write_entry(rc, "background", s->background);
-        xfce_rc_write_entry(rc, "foreground", s->foreground);
-        xfce_rc_write_int_entry(rc, "gradient", s->gradient);
+        xfce_rc_write_entry(rc, "cap_color", s->cap_color);
+        xfce_rc_write_entry(rc, "foreground1", s->foreground1);
+        xfce_rc_write_entry(rc, "foreground2", s->foreground2);
+        xfce_rc_write_int_entry(rc, "foreground", s->foreground);
         gchar **colors = g_new0(gchar*, GRADIENT_COLOR_COUNT + 1);
         for (int i = 0; i < GRADIENT_COLOR_COUNT; i++)
-            colors[i] = g_strdup(s->gradient_colors[i]);
-        xfce_rc_write_list_entry(rc, "gradient_colors", colors, ",");
+            colors[i] = g_strdup(s->vgradient_colors[i]);
+        xfce_rc_write_list_entry(rc, "vgradient_colors", colors, ",");
         g_strfreev(colors);
-        xfce_rc_write_int_entry(rc, "horizontal_gradient", s->horizontal_gradient);
         colors = g_new0(gchar*, GRADIENT_COLOR_COUNT + 1);
         for (int i = 0; i < GRADIENT_COLOR_COUNT; i++)
-            colors[i] = g_strdup(s->horizontal_gradient_colors[i]);
-        xfce_rc_write_list_entry(rc, "horizontal_gradient_colors", colors, ",");
+            colors[i] = g_strdup(s->hgradient_colors[i]);
+        xfce_rc_write_list_entry(rc, "hgradient_colors", colors, ",");
         g_strfreev(colors);
         xfce_rc_write_int_entry(rc, "blend_direction", s->blend_direction);
         xfce_rc_write_entry(rc, "theme", s->theme);
@@ -308,6 +312,7 @@ void profile_read(CavaPlugin *c) {
             s->bar_width = xfce_rc_read_int_entry(rc, "bar_width", default_bar_width);
             s->bar_spacing = xfce_rc_read_int_entry(rc, "bar_spacing", default_bar_spacing);
             s->bar_shape = xfce_rc_read_int_entry(rc, "bar_shape", default_bar_shape);
+            s->bar_caps = xfce_rc_read_int_entry(rc, "bar_caps", default_bar_shape);
             s->max_height = xfce_rc_read_int_entry(rc, "max_height", default_max_height);
             s->lower_cutoff_freq = xfce_rc_read_int_entry(rc, "lower_cutoff_freq", default_lower_cutoff_freq);
             s->higher_cutoff_freq = xfce_rc_read_int_entry(rc, "higher_cutoff_freq", default_higher_cutoff_freq);
@@ -328,18 +333,19 @@ void profile_read(CavaPlugin *c) {
             s->show_idle_bar_heads = xfce_rc_read_int_entry(rc, "show_idle_bar_heads", default_show_idle_bar_heads);
             s->waveform = xfce_rc_read_int_entry(rc, "waveform", default_waveform);
             s->background = g_strdup(xfce_rc_read_entry(rc, "background", default_background));
-            s->foreground = g_strdup(xfce_rc_read_entry(rc, "foreground", default_foreground));
-            s->gradient = xfce_rc_read_int_entry(rc, "gradient", default_gradient);
-            s->gradient_colors = g_strdupv(xfce_rc_read_list_entry(rc, "gradient_colors", ","));
-            if (s->gradient_colors == NULL || 
-                    g_strv_length(s->gradient_colors) < GRADIENT_COLOR_COUNT) {
-                s->gradient_colors = g_strdupv(default_gradient_colors);
+            s->cap_color = g_strdup(xfce_rc_read_entry(rc, "cap_color", default_cap_color));
+            s->foreground1 = g_strdup(xfce_rc_read_entry(rc, "foreground1", default_foreground1));
+            s->foreground2 = g_strdup(xfce_rc_read_entry(rc, "foreground2", default_foreground2));
+            s->foreground = xfce_rc_read_int_entry(rc, "foreground", default_foreground);
+            s->vgradient_colors = g_strdupv(xfce_rc_read_list_entry(rc, "vgradient_colors", ","));
+            if (s->vgradient_colors == NULL || 
+                    g_strv_length(s->vgradient_colors) < GRADIENT_COLOR_COUNT) {
+                s->vgradient_colors = g_strdupv(default_vgradient_colors);
             }
-            s->horizontal_gradient = xfce_rc_read_int_entry(rc, "horizontal_gradient", default_horizontal_gradient);
-            s->horizontal_gradient_colors = g_strdupv(xfce_rc_read_list_entry(rc, "horizontal_gradient_colors", ","));
-            if (s->horizontal_gradient_colors == NULL || 
-                    g_strv_length(s->horizontal_gradient_colors) < GRADIENT_COLOR_COUNT) {
-                s->horizontal_gradient_colors = g_strdupv(default_horizontal_gradient_colors);
+            s->hgradient_colors = g_strdupv(xfce_rc_read_list_entry(rc, "hgradient_colors", ","));
+            if (s->hgradient_colors == NULL || 
+                    g_strv_length(s->hgradient_colors) < GRADIENT_COLOR_COUNT) {
+                s->hgradient_colors = g_strdupv(default_hgradient_colors);
             }
             s->blend_direction = xfce_rc_read_int_entry(rc, "blend_direction", default_blend_direction);
             s->theme = g_strdup(xfce_rc_read_entry(rc, "theme", default_theme));
@@ -383,6 +389,7 @@ void profile_read(CavaPlugin *c) {
     s->bar_width = default_bar_width;
     s->bar_spacing = default_bar_spacing;
     s->bar_shape = default_bar_shape;
+    s->bar_caps = default_bar_caps;
     s->max_height = default_max_height;
     s->lower_cutoff_freq = default_lower_cutoff_freq;
     s->higher_cutoff_freq = default_higher_cutoff_freq;
@@ -404,11 +411,12 @@ void profile_read(CavaPlugin *c) {
     s->show_idle_bar_heads = default_show_idle_bar_heads;
     s->waveform = default_waveform;
     s->background = g_strdup(default_background);
-    s->foreground = g_strdup(default_foreground);
-    s->gradient = default_gradient;
-    s->gradient_colors = g_strdupv(default_gradient_colors);
-    s->horizontal_gradient = default_horizontal_gradient;
-    s->horizontal_gradient_colors = g_strdupv(default_horizontal_gradient_colors);
+    s->cap_color = g_strdup(default_cap_color);
+    s->foreground1 = g_strdup(default_foreground1);
+    s->foreground2 = g_strdup(default_foreground2);
+    s->foreground = default_foreground;
+    s->vgradient_colors = g_strdupv(default_vgradient_colors);
+    s->hgradient_colors = g_strdupv(default_hgradient_colors);
     s->blend_direction = default_blend_direction;
     s->theme = g_strdup(default_theme);
     s->monstercat = default_monstercat;
@@ -429,6 +437,7 @@ static void display_size_allocate(GtkWidget *self, GtkAllocation *allocation,
     if (!c->initialized) {
         restyle_display(c);
         init_cava(c);
+        start_cava(c);
     }
     config_colors(c);
 }
@@ -487,13 +496,15 @@ static void plugin_free(XfcePanelPlugin *plugin, CavaPlugin *c) {
     CavaSettings *s = &c->settings;
     if (G_LIKELY(s->source != NULL)) g_free(s->source);
     if (G_LIKELY(s->background != NULL)) g_free(s->background);
-    if (G_LIKELY(s->foreground != NULL)) g_free(s->foreground);
+    if (G_LIKELY(s->cap_color != NULL)) g_free(s->cap_color);
+    if (G_LIKELY(s->foreground1 != NULL)) g_free(s->foreground1);
+    if (G_LIKELY(s->foreground2 != NULL)) g_free(s->foreground2);
     if (G_LIKELY(s->border_color != NULL)) g_free(s->border_color);
     if (G_LIKELY(s->theme != NULL)) g_free(s->theme);
-    if (G_LIKELY(s->gradient_colors != NULL)) 
-        g_strfreev(s->gradient_colors);
-    if (G_LIKELY(s->horizontal_gradient_colors != NULL)) 
-        g_strfreev(s->horizontal_gradient_colors);
+    if (G_LIKELY(s->vgradient_colors != NULL)) 
+        g_strfreev(s->vgradient_colors);
+    if (G_LIKELY(s->hgradient_colors != NULL)) 
+        g_strfreev(s->hgradient_colors);
     if (G_LIKELY(s->profile != NULL)) g_free(s->profile);
 
     /* free the plugin structure */
@@ -518,6 +529,8 @@ void resize_display(CavaPlugin *c) {
     adjusted_size = plugin_size - (s->margin * 2) - (s->padding * 2);
 
     if (orientation == GTK_ORIENTATION_HORIZONTAL) {
+        height = plugin_size;
+        c->x_offset = 0;
         if (ORIENT_HORIZONTAL(s->orientation)) {
             width = plugin_size * 2;
             c->y_offset = (adjusted_size / 2) - 
@@ -525,11 +538,12 @@ void resize_display(CavaPlugin *c) {
         }
         else {
             width = size;
+            c->y_offset = 0;
         }
-        height = plugin_size;
     }
     else {
         width = plugin_size;
+        c->y_offset = 0;
         if (ORIENT_VERTICAL(s->orientation)) {
             height = plugin_size * 2;
             c->x_offset = (adjusted_size / 2) - 
@@ -537,6 +551,7 @@ void resize_display(CavaPlugin *c) {
         }
         else {
             height = size;
+            c->x_offset = 0;
         }
     }
 
@@ -602,6 +617,13 @@ static gboolean plugin_size_changed(XfcePanelPlugin *plugin, gint size,
     return TRUE;
 }
 
+static void enable_plugin_cb(GtkCheckMenuItem *widget, CavaPlugin *c) {
+    c->enabled = gtk_check_menu_item_get_active(widget);
+    if (c->enabled) {
+        start_cava(c);
+    }
+}
+
 static void plugin_construct(XfcePanelPlugin *plugin) {
     CavaPlugin *c;
 
@@ -639,4 +661,10 @@ static void plugin_construct(XfcePanelPlugin *plugin) {
     xfce_panel_plugin_menu_show_about(plugin);
     g_signal_connect(G_OBJECT(plugin), "about",
             G_CALLBACK(plugin_about), NULL);
+
+    GtkMenuItem *enable_plugin = GTK_MENU_ITEM(gtk_check_menu_item_new_with_label(_("Enabled")));
+    xfce_panel_plugin_menu_insert_item(plugin, enable_plugin);
+    g_signal_connect(G_OBJECT(enable_plugin), "toggled", G_CALLBACK(enable_plugin_cb), c);
+    gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(enable_plugin), TRUE);
+    gtk_widget_show(GTK_WIDGET(enable_plugin));
 }
