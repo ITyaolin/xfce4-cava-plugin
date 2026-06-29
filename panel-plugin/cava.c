@@ -413,7 +413,6 @@ static gboolean exec_cava(CavaPlugin *c) {
     int output_channels = d->output_channels;
 
     if (!c->enabled) {
-        c->timeout_id = -1;
         memset(bars, 0, number_of_bars * sizeof(int));
         memset(caps, 0, number_of_bars * sizeof(double));
         gtk_widget_queue_draw(c->display);
@@ -604,7 +603,7 @@ static gboolean exec_cava(CavaPlugin *c) {
 
     // update bars
     silence = TRUE;
-    double step = (double)dimension_value / 1000.0;
+    double step = (double)dimension_value / (1 * s->framerate);
     for (int n = 0; n < number_of_bars; n++) {
         bars[n] = fmin(dimension_value, bars_raw[n]);
         if (bars[n])
@@ -810,19 +809,16 @@ void config_cava(CavaPlugin *c) {
 }
 
 void start_cava(CavaPlugin *c) {
-    gint timeout = 0;
-
-    if (c->timeout_id == -1) {
-        timeout = 1000 / c->settings.framerate;
-        c->timeout_id = g_timeout_add(timeout, (GSourceFunc)exec_cava, c);
-    }
+    gint timeout = 1000 / c->settings.framerate;
+    if (c->timeout_id > 0)
+        g_source_remove(c->timeout_id);
+    c->timeout_id = g_timeout_add(timeout, (GSourceFunc)exec_cava, c);
 }
 
 void init_cava(CavaPlugin *c) {
     DBG(".");
     init_audio(c);
     config_cava(c);
-    c->timeout_id = -1;
     c->initialized = TRUE;
     g_signal_connect(G_OBJECT(c->display), "draw", G_CALLBACK(draw_cava), c);
 }

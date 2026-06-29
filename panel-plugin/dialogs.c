@@ -172,6 +172,7 @@ static void setting_changed(SettingChanged *sc) {
         resize_display(sc->cava);
         free_cava(sc->cava);
         config_cava(sc->cava); // includes colors update
+        start_cava(sc->cava);
     }
     if (u & UPDATE_INPUT) {
         resize_display(sc->cava);

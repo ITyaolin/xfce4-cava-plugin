@@ -223,6 +223,7 @@ typedef struct {
     /* cava data */
     gboolean    initialized;
     gint        timeout_id;
+    gboolean    active;
     gint        profile_count;
 } CavaPlugin;
 
