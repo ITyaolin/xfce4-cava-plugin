@@ -89,10 +89,9 @@ gchar *default_hgradient_colors[] = {
 };
 const gint default_blend_direction = ORIENT_BOTTOM;
 gchar *default_theme = "none";
-const gint default_integral = 77;
 const gint default_monstercat = 0;
 const gint default_waves = 0;
-const gint default_noise_reduction = 77;
+const gint default_noise_reduction = 10;
 const gint default_equalizer = 0;
 const gdouble default_equalizer_key = 1.0;
 const gint default_border = 0;

@@ -33,6 +33,30 @@ From source code repository:
 
 This plugin uses profiles for switching between themes. Profiles are written to `~/.config/cava/profiles/` in the Xfce4 config file format.
 
-### TODO
+### Settings
 
-- Improve error checking
+Most of the settings in the original CAVA configuration are included in this plugin:
+
+- Up to 512 bars supported
+- Bar size, orientation, color, gradient
+- Equalizer for custom frequency settings
+- Adjustable framerate, sensitivity
+- Adjustable frequency range
+- Stereo mode, smoothing, noise reduction
+
+Several customizable features have been added:
+
+- Oblong (rounded) bar shape
+- Floating bar cap animation
+- Two solid color mode
+
+![plugin](https://github.com/kreddkrikk/xfce4-cava-plugin/blob/main/properties1.png "plugin")
+
+### Troubleshooting
+
+Visualizer animation lags even at reasonable frame rate
+- lower the noise reduction to <20%
+CPU usage very high when plugin is running
+- lower the frame rate and smoothing %
+
+
