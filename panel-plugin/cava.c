@@ -604,12 +604,13 @@ static gboolean exec_cava(CavaPlugin *c) {
 
     // update bars
     silence = TRUE;
+    double step = (double)dimension_value / 1000.0;
     for (int n = 0; n < number_of_bars; n++) {
         bars[n] = fmin(dimension_value, bars_raw[n]);
         if (bars[n])
             silence = FALSE;
         if (s->bar_caps) {
-            caps[n] = fmax(bars[n], fmax(0, caps[n] - 0.05));
+            caps[n] = fmax(bars[n], fmax(0, caps[n] - step));
             if (caps[n])
                 silence = FALSE;
         }

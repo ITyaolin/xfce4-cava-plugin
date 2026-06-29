@@ -522,10 +522,12 @@ static void plugin_orientation_changed(XfcePanelPlugin *plugin,
 }
 
 void resize_display(CavaPlugin *c) {
+    CavaData *d;
     CavaSettings *s;
     GtkOrientation orientation;
     int size, plugin_size, adjusted_size, width, height;
 
+    d = &c->data;
     s = &c->settings;
     orientation = xfce_panel_plugin_get_orientation(c->plugin);
     size = s->bars * (s->bar_width + s->bar_spacing) - s->bar_spacing;
@@ -559,6 +561,10 @@ void resize_display(CavaPlugin *c) {
         }
     }
 
+    // ground any floating caps to zero
+    memset(d->caps, 0, d->number_of_bars * sizeof(double));
+
+    // done
     gtk_widget_set_size_request(c->display, width, height);
 }
 
