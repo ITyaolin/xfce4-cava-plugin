@@ -6,6 +6,8 @@
 
 ----
 
+## Setup
+
 ### Dependencies
 
 Debian/Ubuntu:
@@ -28,6 +30,8 @@ From source code repository:
 ### Uninstallation
 
     % ninja uninstall -C build
+
+## Information
 
 ### Profiles
 
