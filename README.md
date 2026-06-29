@@ -2,9 +2,26 @@
 
 [CAVA](https://github.com/karlstav/cava) plugin for xfce4-panel. This is a work in progress. Only [PipeWire](https://github.com/PipeWire/pipewire) and [PulseAudio](https://github.com/pulseaudio/pulseaudio) are currently supported.
 
+## Info
+
 ![plugin](https://github.com/kreddkrikk/xfce4-cava-plugin/blob/main/cava.gif "plugin") ![plugin](https://github.com/kreddkrikk/xfce4-cava-plugin/blob/main/cava2.gif "plugin")
 
-----
+Most of the settings in the original CAVA configuration are included in this plugin:
+
+- Up to 512 bars supported
+- Bar size, orientation, color, gradient
+- Equalizer for custom frequency settings
+- Adjustable framerate, sensitivity
+- Adjustable frequency range
+- Stereo mode, smoothing, noise reduction
+
+Several customizable features have been added:
+
+- Oblong (rounded) bar shape
+- Floating bar cap animation
+- Two-color mode
+
+This plugin uses profiles for switching between themes. Profiles are written to `~/.config/cava/profiles/` in the Xfce4 config file format.
 
 ## Setup
 
@@ -31,36 +48,12 @@ From source code repository:
 
     % ninja uninstall -C build
 
-## Information
+## Troubleshooting
 
-### Profiles
+### Visualizer animation lags even at reasonable frame rate
+Lower the noise reduction to <20%.
 
-This plugin uses profiles for switching between themes. Profiles are written to `~/.config/cava/profiles/` in the Xfce4 config file format.
-
-### Settings
-
-Most of the settings in the original CAVA configuration are included in this plugin:
-
-- Up to 512 bars supported
-- Bar size, orientation, color, gradient
-- Equalizer for custom frequency settings
-- Adjustable framerate, sensitivity
-- Adjustable frequency range
-- Stereo mode, smoothing, noise reduction
-
-Several customizable features have been added:
-
-- Oblong (rounded) bar shape
-- Floating bar cap animation
-- Two solid color mode
-
-![plugin](https://github.com/kreddkrikk/xfce4-cava-plugin/blob/main/properties1.png "plugin")
-
-### Troubleshooting
-
-Visualizer animation lags even at reasonable frame rate
-- lower the noise reduction to <20%
-CPU usage very high when plugin is running
-- lower the frame rate and smoothing %
+### CPU usage very high when plugin is running
+Lower the frame rate and smoothing %.
 
 
