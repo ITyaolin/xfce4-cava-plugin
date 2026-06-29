@@ -601,6 +601,8 @@ static gboolean exec_cava(CavaPlugin *c) {
             }
         }
     }
+
+    // update bars
     silence = TRUE;
     for (int n = 0; n < number_of_bars; n++) {
         bars[n] = fmin(dimension_value, bars_raw[n]);
@@ -615,6 +617,8 @@ static gboolean exec_cava(CavaPlugin *c) {
         if (bars[n] < 1 && s->waveform == 0 && s->show_idle_bar_heads == 1)
             bars[n] = 1;
     }
+
+    // redraw
     gtk_widget_queue_draw(c->display);
     memcpy(previous_frame, bars, number_of_bars * sizeof(int));
 
@@ -633,6 +637,17 @@ void free_cava(CavaPlugin *c) {
     free(d->bars);
     free(d->bars_raw);
     free(d->previous_frame);
+}
+
+void free_audio(CavaPlugin *c) {
+    DBG(".");
+    struct audio_data *audio = &c->audio;
+    pthread_mutex_lock(&audio->lock);
+    audio->terminate = 1;
+    pthread_mutex_unlock(&audio->lock);
+    pthread_join(c->audio_thread, NULL);
+    free(audio->source);
+    free(audio->cava_in);
 }
 
 static void init_audio(CavaPlugin *c) {
@@ -654,19 +669,18 @@ static void init_audio(CavaPlugin *c) {
     memset(audio->cava_in, 0, sizeof(int) * audio->cava_buffer_size);
     audio->threadparams = 0;
     audio->terminate = 0;
-    pthread_t p_thread;
     int timeout_counter = 0;
     struct timespec timeout_timer = {.tv_sec = 0, .tv_nsec = 1000000};
     int thr_id GCC_UNUSED;
     pthread_mutex_init(&audio->lock, NULL);
-    switch (s->method) {
+    switch (s->input) {
         case INPUT_PULSE:
             audio->format = 16;
             audio->rate = 44100;
             if (strcmp(audio->source, "auto") == 0) {
                 getPulseDefaultSink((void *)audio);
             }
-            thr_id = pthread_create(&p_thread, NULL, input_pulse, 
+            thr_id = pthread_create(&c->audio_thread, NULL, input_pulse, 
                     (void *)audio);
             break;
         case INPUT_PIPEWIRE:
@@ -676,7 +690,7 @@ static void init_audio(CavaPlugin *c) {
             audio->active = s->active;
             audio->remix = s->remix;
             audio->virtual_node = s->virtual;
-            thr_id = pthread_create(&p_thread, NULL, input_pipewire, 
+            thr_id = pthread_create(&c->audio_thread, NULL, input_pipewire, 
                     (void *)audio);
             break;
         default:

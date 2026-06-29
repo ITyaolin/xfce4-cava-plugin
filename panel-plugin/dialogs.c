@@ -72,7 +72,7 @@ enum {
     UPDATE_SIZE = 2, // resize display
     UPDATE_COLORS = 4, // reconfigure bar colors
     UPDATE_CONFIG = 8, // reallocate buffers and cava plan
-    UPDATE_ALL = 16, // reconfigure and reallocate everything
+    UPDATE_INPUT = 16, // reinitialize cava
 } UpdateEvent;
 
 typedef struct {
@@ -139,7 +139,8 @@ static void load_settings(CavaPlugin *c) {
     /* update all */
     resize_display(c);
     free_cava(c);
-    config_cava(c);
+    free_audio(c);
+    init_cava(c);
 }
 
 static void update_foreground(CavaPlugin *c) {
@@ -168,13 +169,15 @@ static void setting_changed(SettingChanged *sc) {
         config_colors(sc->cava);
     }
     if (u & UPDATE_CONFIG) {
+        resize_display(sc->cava);
         free_cava(sc->cava);
         config_cava(sc->cava); // includes colors update
     }
-    if (u & UPDATE_ALL) {
+    if (u & UPDATE_INPUT) {
         resize_display(sc->cava);
         free_cava(sc->cava);
-        config_cava(sc->cava);
+        free_audio(sc->cava);
+        init_cava(sc->cava);
     }
 }
 
@@ -576,6 +579,17 @@ static void create_reset_button(CavaPlugin *c, GtkWidget *row, gchar *text,
     g_signal_connect(button, "clicked", G_CALLBACK(cb), c);
 }
 
+static GtkWidget *create_profile_button(CavaPlugin *c, GtkWidget *box, 
+        GCallback cb, gchar *icon_name, gchar *tooltip) {
+    GtkWidget *button = gtk_button_new();
+    GtkWidget *icon = gtk_image_new_from_icon_name(icon_name, GTK_ICON_SIZE_BUTTON);
+    gtk_button_set_image(GTK_BUTTON(button), icon);
+    gtk_box_pack_start(GTK_BOX(box), GTK_WIDGET(button), FALSE, FALSE, 0);
+    g_signal_connect(button, "clicked", cb, c);
+    gtk_widget_set_tooltip_text(button, tooltip);
+    return button;
+}
+
 static void populate_profile_combo_box(CavaPlugin *c) {
     GDir *dir;
     GError *error;
@@ -654,7 +668,7 @@ void plugin_configure(XfcePanelPlugin *plugin, CavaPlugin *c) {
     GtkWidget *vbox_bars = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
     gtk_container_set_border_width(GTK_CONTAINER(vbox_bars), 8);
     GtkSizeGroup *sg = gtk_size_group_new(GTK_SIZE_GROUP_HORIZONTAL);
-    w->bars = create_spin_button(c, vbox_bars, sg, UPDATE_ALL, 
+    w->bars = create_spin_button(c, vbox_bars, sg, UPDATE_CONFIG, 
             "Number:", &s->bars, 1, 512);
     w->bar_width = create_spin_button(c, vbox_bars, sg, UPDATE_SIZE, 
             "Width:", &s->bar_width, 1, 100);
@@ -666,11 +680,10 @@ void plugin_configure(XfcePanelPlugin *plugin, CavaPlugin *c) {
         "rectangle",
         "oblong",
     };
-    GtkWidget *container;
     w->bar_shape = create_combo_box(
             c, vbox_bars, sg, UPDATE_NONE, "Shape:", 
             bar_shape_items, ARRAY_SIZE(bar_shape_items), &s->bar_shape);
-    container = gtk_widget_get_parent(w->bar_shape);
+    GtkWidget *container = gtk_widget_get_parent(w->bar_shape);
     w->bar_caps = create_check_button(
             c, container, sg, UPDATE_COLORS, "Caps", &s->bar_caps);
 
@@ -814,13 +827,13 @@ void plugin_configure(XfcePanelPlugin *plugin, CavaPlugin *c) {
     gtk_box_pack_start(GTK_BOX(vbox_adv), 
             gtk_separator_new(GTK_ORIENTATION_VERTICAL), FALSE, FALSE, 4);
     w->stereo = create_check_button(
-            c, vbox_adv, sg, UPDATE_ALL, "Stereo", &s->stereo);
+            c, vbox_adv, sg, UPDATE_CONFIG, "Stereo", &s->stereo);
     w->monstercat = create_spin_button(
             c, vbox_adv, sg, UPDATE_NONE, "Smoothing (%):", &s->monstercat, 0, 100);
     w->waves = create_check_button(
             c, vbox_adv, sg, UPDATE_NONE, "Waves", &s->waves);
     w->noise_reduction = create_spin_button(
-            c, vbox_adv, sg, UPDATE_ALL, "Noise Reduction (%):", &s->noise_reduction, 0, 100);
+            c, vbox_adv, sg, UPDATE_CONFIG, "Noise Reduction (%):", &s->noise_reduction, 0, 100);
 
     // Tab Pages
     GtkWidget* notebook = gtk_notebook_new();
@@ -842,37 +855,28 @@ void plugin_configure(XfcePanelPlugin *plugin, CavaPlugin *c) {
     gtk_container_set_border_width(GTK_CONTAINER(main), 8);
 
     // Profile
-    GtkWidget *icon;
+    sg = gtk_size_group_new(GTK_SIZE_GROUP_HORIZONTAL);
     w->profile = gtk_combo_box_text_new();
     populate_profile_combo_box(c);
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    label_and_pack_widget(main, hbox, w->profile, NULL, "Profile:", 0.0, FALSE);
+    label_and_pack_widget(main, hbox, w->profile, sg, "Profile:", 0.0, FALSE);
+    w->ren_profile = create_profile_button(c, hbox, 
+            G_CALLBACK(ren_profile_button_clicked), 
+            "document-edit", "Rename profile");
+    w->del_profile = create_profile_button(c, hbox, 
+            G_CALLBACK(del_profile_button_clicked), 
+            "edit-delete", "Delete profile");
+    w->new_profile = create_profile_button(c, hbox, 
+            G_CALLBACK(new_profile_button_clicked), 
+            "document-new", "New profile");
 
-    w->ren_profile = gtk_button_new();
-    icon = gtk_image_new_from_icon_name("document-edit", GTK_ICON_SIZE_BUTTON);
-    gtk_button_set_image(GTK_BUTTON(w->ren_profile), icon);
-    gtk_box_pack_start(GTK_BOX(hbox), GTK_WIDGET(w->ren_profile), FALSE, FALSE, 0);
-    g_signal_connect(
-            w->ren_profile, "clicked", G_CALLBACK(ren_profile_button_clicked), c);
-    gtk_widget_set_tooltip_text(w->ren_profile, "Rename profile");
-
-    w->del_profile = gtk_button_new();
-    icon = gtk_image_new_from_icon_name("edit-delete", GTK_ICON_SIZE_BUTTON);
-    gtk_button_set_image(GTK_BUTTON(w->del_profile), icon);
-    gtk_widget_set_sensitive(GTK_WIDGET(w->del_profile), c->profile_count > 1);
-    gtk_box_pack_start(GTK_BOX(hbox), GTK_WIDGET(w->del_profile), FALSE, FALSE, 0);
-    g_signal_connect(
-            w->del_profile, "clicked", G_CALLBACK(del_profile_button_clicked), c);
-    gtk_widget_set_tooltip_text(w->del_profile, "Delete profile");
-
-    w->new_profile = gtk_button_new();
-    icon = gtk_image_new_from_icon_name("document-new", GTK_ICON_SIZE_BUTTON);
-    gtk_button_set_image(GTK_BUTTON(w->new_profile), icon);
-    gtk_box_pack_start(
-            GTK_BOX(hbox), GTK_WIDGET(w->new_profile), FALSE, FALSE, 0);
-    g_signal_connect(
-            w->new_profile, "clicked", G_CALLBACK(new_profile_button_clicked), c);
-    gtk_widget_set_tooltip_text(w->new_profile, "New profile");
+    // Input
+    const gchar *input_items[] = {
+        "PipeWire",
+        "PulseAudio",
+    };
+    w->input = create_combo_box(c, main, sg, UPDATE_INPUT, "Input:", 
+            input_items, ARRAY_SIZE(input_items), &s->input);
 
     // Done
     gtk_box_pack_start(GTK_BOX(main), notebook, FALSE, FALSE, 8);

@@ -44,7 +44,7 @@ const gint default_max_height = 100;
 const gint default_lower_cutoff_freq = 60;
 const gint default_higher_cutoff_freq = 16000;
 const gint default_sleep_timer = 1;
-const gint default_method = INPUT_PIPEWIRE; //INPUT_PULSE;
+const gint default_input = INPUT_PIPEWIRE; //INPUT_PULSE;
 gchar *default_source = "auto";
 const gint default_sample_rate = 44100;
 const gint default_sample_bits = 16;
@@ -199,7 +199,7 @@ void profile_save(CavaPlugin *c) {
         xfce_rc_write_int_entry(rc, "lower_cutoff_freq", s->lower_cutoff_freq);
         xfce_rc_write_int_entry(rc, "higher_cutoff_freq", s->higher_cutoff_freq);
         xfce_rc_write_int_entry(rc, "sleep_timer", s->sleep_timer);
-        xfce_rc_write_int_entry(rc, "method", s->method);
+        xfce_rc_write_int_entry(rc, "input", s->input);
         xfce_rc_write_entry(rc, "source", s->source);
         xfce_rc_write_int_entry(rc, "sample_rate", s->sample_rate);
         xfce_rc_write_int_entry(rc, "sample_bits", s->sample_bits);
@@ -317,7 +317,7 @@ void profile_read(CavaPlugin *c) {
             s->lower_cutoff_freq = xfce_rc_read_int_entry(rc, "lower_cutoff_freq", default_lower_cutoff_freq);
             s->higher_cutoff_freq = xfce_rc_read_int_entry(rc, "higher_cutoff_freq", default_higher_cutoff_freq);
             s->sleep_timer = xfce_rc_read_int_entry(rc, "sleep_timer", default_sleep_timer);
-            s->method = xfce_rc_read_int_entry(rc, "method", default_method);
+            s->input = xfce_rc_read_int_entry(rc, "input", default_input);
             s->source = g_strdup(xfce_rc_read_entry(rc, "source", default_source));
             s->sample_rate = xfce_rc_read_int_entry(rc, "sample_rate", default_sample_rate);
             s->sample_bits = xfce_rc_read_int_entry(rc, "sample_bits", default_sample_bits);
@@ -395,7 +395,7 @@ void profile_read(CavaPlugin *c) {
     s->higher_cutoff_freq = default_higher_cutoff_freq;
     s->max_height = default_max_height;
     s->sleep_timer = default_sleep_timer;
-    s->method = default_method;
+    s->input = default_input;
     s->source = g_strdup(default_source);
     s->sample_rate = default_sample_rate;
     s->sample_bits = default_sample_bits;

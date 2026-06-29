@@ -26,17 +26,17 @@
 G_BEGIN_DECLS
 
 enum input_method {
-    INPUT_FIFO,
-    INPUT_PORTAUDIO,
+    //INPUT_FIFO,
+    //INPUT_PORTAUDIO,
     INPUT_PIPEWIRE,
-    INPUT_ALSA,
+    //INPUT_ALSA,
     INPUT_PULSE,
-    INPUT_SNDIO,
-    INPUT_OSS,
-    INPUT_JACK,
-    INPUT_SHMEM,
-    INPUT_WINSCAP,
-    INPUT_MAX,
+    //INPUT_SNDIO,
+    //INPUT_OSS,
+    //INPUT_JACK,
+    //INPUT_SHMEM,
+    //INPUT_WINSCAP,
+    //INPUT_MAX,
 };
 
 enum mono_option { LEFT, RIGHT, AVERAGE };
@@ -91,7 +91,7 @@ typedef struct {
     gint    higher_cutoff_freq;
     gint    sleep_timer;
     /* input */
-    gint    method;
+    gint    input;
     gchar   *source;
     gint    sample_rate;
     gint    sample_bits;
@@ -136,6 +136,7 @@ typedef struct {
     GtkWidget *new_profile;
     GtkWidget *del_profile;
     GtkWidget *ren_profile;
+    GtkWidget *input;
     /* general */
     GtkWidget *framerate;
     GtkWidget *sensitivity;
@@ -177,16 +178,16 @@ typedef struct {
 } SettingWidgets;
 
 typedef struct {
-    int     *bars;
-    double     *caps;
-    int     *previous_frame;
-    float   *bars_left;
-    float   *bars_right;
-    double  *cava_out;
-    float   *bars_raw;
-    int     number_of_bars;
-    int     raw_number_of_bars;
-    int     output_channels;
+    int       *bars;
+    double    *caps;
+    int       *previous_frame;
+    float     *bars_left;
+    float     *bars_right;
+    double    *cava_out;
+    float     *bars_raw;
+    int       number_of_bars;
+    int       raw_number_of_bars;
+    int       output_channels;
 } CavaData;
 
 /* plugin structure */
@@ -209,6 +210,7 @@ typedef struct {
     CavaData            data;
     struct cava_plan    *plan;
     struct audio_data   audio;
+    pthread_t audio_thread;
     cairo_pattern_t     *foreground;
     cairo_pattern_t     *cap_color;
 
@@ -234,6 +236,7 @@ void start_cava(CavaPlugin *cava);
 void stop_cava(CavaPlugin *cava);
 void config_cava(CavaPlugin *cava);
 void free_cava(CavaPlugin *cava);
+void free_audio(CavaPlugin *cava);
 void resize_display(CavaPlugin *cava);
 void restyle_display(CavaPlugin *cava);
 void config_colors(CavaPlugin *cava);
