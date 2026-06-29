@@ -445,6 +445,7 @@ static gboolean exec_cava(CavaPlugin *c) {
     int dimension_value = alloc.height;
     if (ORIENT_HORIZONTAL(s->orientation))
         dimension_value = alloc.width;
+    dimension_value = fmin(s->size, dimension_value);
     if (dimension_value < 2)
         return TRUE;
 
@@ -457,9 +458,8 @@ static gboolean exec_cava(CavaPlugin *c) {
                 cava_out[i] = cava_out[i - 1];
             }
             if (audio->channels == 2) {
-                cava_out[0] =
-                    sensitivity * (audio->cava_in[n] / 2 + 
-                            audio->cava_in[n + 1] / 2);
+                cava_out[0] = sensitivity * (audio->cava_in[n] / 2 + 
+                        audio->cava_in[n + 1] / 2);
                 n++;
             }
             else {

@@ -699,6 +699,8 @@ void plugin_configure(XfcePanelPlugin *plugin, CavaPlugin *c) {
     w->orientation = create_combo_box(c, vbox_bars, sg, 
             UPDATE_SIZE | UPDATE_COLORS, "Orientation:", 
             orientation_items, ARRAY_SIZE(orientation_items), &s->orientation);
+    w->size = create_spin_button(c, vbox_bars, sg, UPDATE_SIZE, 
+            "Size:", &s->size, 0, 1000);
     gtk_box_pack_start(GTK_BOX(vbox_bars), 
             gtk_separator_new(GTK_ORIENTATION_VERTICAL), FALSE, FALSE, 4);
 

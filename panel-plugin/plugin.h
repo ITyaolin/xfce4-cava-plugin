@@ -102,6 +102,7 @@ typedef struct {
     gint    virtual;
     /* output */
     gint    orientation;
+    gint    size;
     gint    stereo;
     gint    mono_option;
     gint    reverse;
@@ -136,7 +137,6 @@ typedef struct {
     GtkWidget *new_profile;
     GtkWidget *del_profile;
     GtkWidget *ren_profile;
-    GtkWidget *input;
     /* general */
     GtkWidget *framerate;
     GtkWidget *sensitivity;
@@ -149,8 +149,10 @@ typedef struct {
     GtkWidget *higher_cutoff_freq;
     GtkWidget *sleep_timer;
     /* input */
+    GtkWidget *input;
     /* output */
     GtkWidget *orientation;
+    GtkWidget *size;
     GtkWidget *stereo;
     /* color */
     GtkWidget *background;

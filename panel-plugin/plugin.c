@@ -54,6 +54,7 @@ const gint default_active = 0;
 const gint default_remix = 1;
 const gint default_virtual = 1;
 const gint default_orientation = ORIENT_SPLIT_H;
+const gint default_size = 100;
 const gint default_stereo = 0;
 const gint default_mono_option = AVERAGE;
 const gint default_reverse = 0;
@@ -209,6 +210,7 @@ void profile_save(CavaPlugin *c) {
         xfce_rc_write_int_entry(rc, "remix", s->remix);
         xfce_rc_write_int_entry(rc, "virtual", s->virtual);
         xfce_rc_write_int_entry(rc, "orientation", s->orientation);
+        xfce_rc_write_int_entry(rc, "size", s->size);
         xfce_rc_write_int_entry(rc, "stereo", s->stereo);
         xfce_rc_write_int_entry(rc, "mono_option", s->mono_option);
         xfce_rc_write_int_entry(rc, "reverse", s->reverse);
@@ -327,6 +329,7 @@ void profile_read(CavaPlugin *c) {
             s->remix = xfce_rc_read_int_entry(rc, "remix", default_remix);
             s->virtual = xfce_rc_read_int_entry(rc, "virtual", default_virtual);
             s->orientation = xfce_rc_read_int_entry(rc, "orientation", default_orientation);
+            s->size = xfce_rc_read_int_entry(rc, "size", default_size);
             s->stereo = xfce_rc_read_int_entry(rc, "stereo", default_stereo);
             s->mono_option = xfce_rc_read_int_entry(rc, "mono_option", default_mono_option);
             s->reverse = xfce_rc_read_int_entry(rc, "reverse", default_reverse);
@@ -405,6 +408,7 @@ void profile_read(CavaPlugin *c) {
     s->remix = default_remix;
     s->virtual = default_virtual;
     s->orientation = default_orientation;
+    s->size = default_size;
     s->stereo = default_stereo;
     s->mono_option = default_mono_option;
     s->reverse = default_reverse;
@@ -532,7 +536,7 @@ void resize_display(CavaPlugin *c) {
         height = plugin_size;
         c->x_offset = 0;
         if (ORIENT_HORIZONTAL(s->orientation)) {
-            width = plugin_size * 2;
+            width = s->size; //plugin_size * 2;
             c->y_offset = (adjusted_size / 2) - 
                 ((s->bars * (s->bar_width + s->bar_spacing)) / 2);
         }
@@ -545,7 +549,7 @@ void resize_display(CavaPlugin *c) {
         width = plugin_size;
         c->y_offset = 0;
         if (ORIENT_VERTICAL(s->orientation)) {
-            height = plugin_size * 2;
+            height = s->size; //plugin_size * 2;
             c->x_offset = (adjusted_size / 2) - 
                 ((s->bars * (s->bar_width + s->bar_spacing)) / 2);
         }
